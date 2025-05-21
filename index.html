@@ -52,12 +52,10 @@
         <p id="auth-required-message" class="info-message" style="display: block;">
             Please log in with your @maroltingergasse.at email to view and rate items.
         </p>
-        <!-- This p tag will be dynamically created by JS for verification messages
-        <p id="verification-message" class="info-message" style="display: none;"></p>
-        -->
+        <!-- verificationMessageP is created dynamically by JS -->
     </div>
 
-    <!-- ADD type="module" to your script tag -->
     <script type="module" src="../js/script.js"></script>
+    <!-- Netlify will inject the firebaseConfigFromNetlify script (configured in Netlify UI) typically here, before </body> -->
 </body>
 </html>
