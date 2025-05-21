@@ -26,6 +26,7 @@ let auth;
 let db;
 
 // --- DOM Elements (to be fetched inside initializeMainAppLogic or DOMContentLoaded) ---
+// verificationMessageP is declared here, but created and assigned in DOMContentLoaded
 let authContainer, loginView, registerView, showRegisterLink, showLoginLink,
     loginEmailInput, loginPasswordInput, loginButton,
     registerEmailInput, registerPasswordInput, registerButton,
@@ -61,10 +62,10 @@ function initializeMainAppLogic() {
     } catch (e) {
         console.error("CRITICAL: Firebase initialization FAILED within initializeMainAppLogic:", e);
         document.body.innerHTML = "<p style='color:red; font-size:18px; padding:20px;'>Error: App init failed (Firebase). Check console.</p>";
-        return; // Stop if Firebase can't be initialized
+        return;
     }
 
-    // Get DOM Elements now that DOM is ready and Firebase is (or should be) init
+    // Get DOM Elements now that DOM is ready and Firebase is init
     authContainer = document.getElementById('auth-container');
     loginView = document.getElementById('login-view');
     registerView = document.getElementById('register-view');
@@ -82,21 +83,19 @@ function initializeMainAppLogic() {
     authErrorP = document.getElementById('auth-error');
     mainContentWrapper = document.getElementById('main-content-wrapper');
     authRequiredMessage = document.getElementById('auth-required-message');
+    // verificationMessageP should have been created and inserted by the DOMContentLoaded listener
 
-    // verificationMessageP is already created globally, just ensure it's referenceable
-    // It was inserted into the DOM in the outer DOMContentLoaded listener.
-
-    // Check if critical elements were found
-    if (!loginButton || !authContainer || !mainContentWrapper || !userInfoDisplay || !registerButton || !logoutButton) {
-        console.error("CRITICAL: One or more essential DOM elements for app logic were not found!");
-        document.body.innerHTML = "<p style='color:red; font-size:18px; padding:20px;'>Error: UI elements missing. App cannot start.</p>";
-        return; // Stop if UI is broken
+    if (!loginButton || !authContainer || !mainContentWrapper || !userInfoDisplay || !registerButton || !logoutButton || !verificationMessageP) {
+        console.error("CRITICAL: One or more essential DOM elements for app logic were not found or verificationMessageP not ready!");
+        // Avoid overwriting body if verificationMessageP is the only issue and it logs its own creation problem
+        if(!verificationMessageP) document.body.innerHTML = "<p style='color:red; font-size:18px; padding:20px;'>Error: UI elements missing. App cannot start.</p>";
+        return;
     }
 
     // --- AUTHENTICATION LOGIC ---
     onAuthStateChanged(auth, async (user) => {
         console.log("%cON AUTH STATE CHANGED (main logic):", "color: blue; font-weight: bold;", user);
-        if(authErrorP) authErrorP.textContent = ''; // Clear previous errors
+        if(authErrorP) authErrorP.textContent = '';
 
         if (user) {
             console.log("onAuthStateChanged: User object present. Reloading user state...");
@@ -135,7 +134,7 @@ function initializeMainAppLogic() {
                                     .then(() => {
                                         verificationMessageP.innerHTML = `Verification email resent to <strong>${freshUser.email}</strong>. (Btn in 20s)`;
                                         setTimeout(() => {
-                                            if(verificationMessageP.style.display === 'block' && auth.currentUser && !auth.currentUser.emailVerified) {
+                                            if(verificationMessageP && verificationMessageP.style.display === 'block' && auth.currentUser && !auth.currentUser.emailVerified) {
                                                 verificationMessageP.innerHTML = `A verification email was sent to <strong>${freshUser.email}</strong>. Please verify. <button id="resend-verification-btn">Resend</button>`;
                                             }
                                         }, 20000);
@@ -165,7 +164,6 @@ function initializeMainAppLogic() {
         }
     });
 
-    // --- Event Listeners for UI Toggles and Auth Actions ---
     if (showRegisterLink) showRegisterLink.addEventListener('click', (e) => { e.preventDefault(); loginView.style.display = 'none'; registerView.style.display = 'block'; if(authErrorP) authErrorP.textContent = ''; if(verificationMessageP) verificationMessageP.style.display = 'none'; });
     if (showLoginLink) showLoginLink.addEventListener('click', (e) => { e.preventDefault(); registerView.style.display = 'none'; loginView.style.display = 'block'; if(authErrorP) authErrorP.textContent = ''; if(verificationMessageP) verificationMessageP.style.display = 'none'; });
 
@@ -224,11 +222,10 @@ function initializeMainAppLogic() {
                 itemListeners.forEach(unsubscribe => unsubscribe()); itemListeners = [];
                 itemsData = {}; userVotes = {}; currentUserId = null;
                 const mainContainer = document.querySelector('.main');
-                if(mainContainer) mainContainer.innerHTML = ''; // Clear the items
+                if(mainContainer) mainContainer.innerHTML = '';
             }).catch((error) => { if(authErrorP) authErrorP.textContent = "Logout error: " + error.message; });
         });
     }
-
     console.log("Main app event listeners and auth logic initialized.");
 } // End of initializeMainAppLogic
 
@@ -240,23 +237,32 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log("script.js: DOMContentLoaded event fired.");
     console.log("script.js: Checking for window.firebaseConfigFromNetlify on DOMContentLoaded:", window.firebaseConfigFromNetlify);
 
-    // Create and insert verificationMessageP into the DOM here, once.
-    // It was declared globally, now ensure it's in the DOM.
-    // verificationMessageP is already created, let's ensure it's inserted if it wasn't
-    // This was previously outside DOMContentLoaded, which could be an issue if authContainer wasn't ready
-    // Let's ensure it's correctly placed before authContainer if possible.
-    const tempAuthContainer = document.getElementById('auth-container'); // Re-fetch for this scope
-    if (!document.getElementById('verification-message')) { // Only insert if not already there
+    // --- CREATE and INSERT verificationMessageP ---
+    if (!document.getElementById('verification-message')) {
+        verificationMessageP = document.createElement('p'); // Assign to the globally declared variable
+        verificationMessageP.id = 'verification-message';
+        verificationMessageP.className = 'info-message';
+        verificationMessageP.style.display = 'none';
+
+        const tempAuthContainer = document.getElementById('auth-container');
         if (tempAuthContainer && tempAuthContainer.parentNode) {
             tempAuthContainer.parentNode.insertBefore(verificationMessageP, tempAuthContainer);
-        } else if (document.body && document.body.firstChild) { // Fallback to start of body
+            console.log("verificationMessageP inserted before auth-container.");
+        } else if (document.body && document.body.firstChild) {
             document.body.insertBefore(verificationMessageP, document.body.firstChild);
-        } else if (document.body) { // Fallback if no firstChild
-             document.body.appendChild(verificationMessageP);
+            console.log("verificationMessageP inserted at start of body (fallback).");
+        } else if (document.body) {
+            document.body.appendChild(verificationMessageP);
+            console.log("verificationMessageP appended to body (fallback).");
+        } else {
+            console.error("Could not find a place to insert verificationMessageP!");
         }
+    } else {
+        verificationMessageP = document.getElementById('verification-message'); // Get ref if already exists
+        console.log("verificationMessageP already exists in DOM.");
     }
 
-
+    // --- Check for Firebase Config and Initialize App Logic ---
     if (window.firebaseConfigFromNetlify &&
         window.firebaseConfigFromNetlify.apiKey &&
         window.firebaseConfigFromNetlify.apiKey !== "" &&
@@ -282,19 +288,81 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.error("CRITICAL (after timeout): Firebase configuration from Netlify NOT FOUND or not populated!");
                 console.log("window.firebaseConfigFromNetlify (after timeout) is:", window.firebaseConfigFromNetlify);
                 let errorDisplayArea = document.getElementById('auth-container') || document.body;
-                errorDisplayArea.innerHTML = "<p style='color:red; font-size:18px; padding:20px;'>Error: Application configuration is missing. Please double-check Netlify environment variables and snippet injection settings, then ensure you've triggered a new deploy on Netlify.</p>" + (errorDisplayArea === document.body ? errorDisplayArea.innerHTML : "");
+                errorDisplayArea.innerHTML = "<p style='color:red; font-size:18px; padding:20px;'>Error: Application configuration is missing. Please double-check Netlify environment variables and snippet injection settings, then ensure you've triggered a new deploy on Netlify.</p>" + (errorDisplayArea === document.body ? "" : errorDisplayArea.innerHTML); // Avoid duplicating body content
             }
         }, 500);
     }
 });
 
-
 // --- LIKING/RANKING SYSTEM FUNCTIONS (Must be accessible by initializeMainAppLogic) ---
+async function initializeLikingSystem() {
+    console.log("%c--- initializeLikingSystem CALLED ---", "color: purple; font-weight: bold;");
+    if (auth.currentUser && auth.currentUser.emailVerified) {
+        currentUserId = auth.currentUser.uid;
+        console.log("initializeLikingSystem: User is valid. UID:", currentUserId);
+    } else {
+        console.error("initializeLikingSystem: Pre-condition not met (user not logged in or verified). Aborting.");
+        if(mainContentWrapper) mainContentWrapper.style.display = 'none';
+        if(authRequiredMessage) authRequiredMessage.style.display = auth.currentUser && !auth.currentUser.emailVerified ? 'none' : 'block';
+        return;
+    }
 
-function calculateInternalScore(likes, dislikes) {
-    const rawLikeScore = calculateRawVoteScore(likes);
-    const rawDislikeScore = calculateRawVoteScore(dislikes);
-    return 5 + rawLikeScore - rawDislikeScore;
+    itemListeners.forEach(unsubscribe => unsubscribe()); itemListeners = [];
+    try {
+        await loadUserVotes();
+        console.log("initializeLikingSystem: User votes loaded:", userVotes);
+    } catch (e) { console.error("initializeLikingSystem: Error during loadUserVotes:", e); userVotes = {}; }
+
+    const mainContainer = document.querySelector('.main');
+    if (!mainContainer) { console.error("initializeLikingSystem: CRITICAL - '.main' container NOT FOUND."); return; }
+    console.log("initializeLikingSystem: '.main' container found. Clearing content.");
+    mainContainer.innerHTML = ''; itemsData = {};
+
+    console.log("initializeLikingSystem: Processing PREDEFINED_ITEMS_CONFIG. Count:", PREDEFINED_ITEMS_CONFIG.length);
+    if (PREDEFINED_ITEMS_CONFIG.length === 0) console.warn("initializeLikingSystem: PREDEFINED_ITEMS_CONFIG is empty.");
+
+    for (const pItemConfig of PREDEFINED_ITEMS_CONFIG) {
+        const itemId = pItemConfig.id; const h2Prefix = `${itemId}: `;
+        console.log(`initializeLikingSystem: Processing item '${itemId}'`);
+
+        const firestoreItemData = await ensureItemDocExists(itemId, pItemConfig);
+        if (!firestoreItemData) { console.warn(`initializeLikingSystem: Skipping item '${itemId}' - no Firestore data.`); continue; }
+        console.log(`initializeLikingSystem: Firestore data for '${itemId}':`, firestoreItemData);
+
+        const boxElement = document.createElement('div'); boxElement.className = 'box'; boxElement.dataset.itemId = itemId;
+        const h2 = document.createElement('h2');
+        const voteControls = document.createElement('div'); voteControls.className = 'vote-controls';
+        voteControls.innerHTML = `<button class="like-btn" aria-label="Like">👍<span class="likes-count">(0)</span></button><button class="dislike-btn" aria-label="Dislike">👎<span class="dislikes-count">(0)</span></button>`;
+        boxElement.appendChild(h2); boxElement.appendChild(voteControls);
+        mainContainer.appendChild(boxElement);
+        console.log(`initializeLikingSystem: Appended box for '${itemId}'.`);
+
+        itemsData[itemId] = {
+            likes: firestoreItemData.likes, dislikes: firestoreItemData.dislikes,
+            internalScore: calculateInternalScore(firestoreItemData.likes, firestoreItemData.dislikes),
+            h2Prefix: h2Prefix, originalOrder: PREDEFINED_ITEMS_CONFIG.findIndex(item => item.id === itemId), element: boxElement
+        };
+        voteControls.querySelector('.like-btn').addEventListener('click', () => handleVote(itemId, 'like'));
+        voteControls.querySelector('.dislike-btn').addEventListener('click', () => handleVote(itemId, 'dislike'));
+        updateBoxDisplay(itemId);
+
+        const itemRef = doc(db, 'items', itemId);
+        const unsubscribe = onSnapshot(itemRef, (docSnap) => {
+            // console.log(`Realtime update for ${itemId}:`, docSnap.data()); // Can be noisy
+            if (docSnap.exists()) {
+                const updatedData = docSnap.data();
+                if (itemsData[itemId] && (itemsData[itemId].likes !== updatedData.likes || itemsData[itemId].dislikes !== updatedData.dislikes)) {
+                    console.log(`Applying realtime update for ${itemId}`);
+                    itemsData[itemId].likes = updatedData.likes; itemsData[itemId].dislikes = updatedData.dislikes;
+                    itemsData[itemId].internalScore = calculateInternalScore(updatedData.likes, updatedData.dislikes);
+                    updateBoxDisplay(itemId); renderSortedBoxes();
+                }
+            }
+        }, error => { console.error(`Error listening to item ${itemId}:`, error); });
+        itemListeners.push(unsubscribe);
+    }
+    renderSortedBoxes();
+    console.log("initializeLikingSystem: Initialization complete. Final itemsData:", itemsData);
 }
 
 async function loadUserVotes() {
@@ -303,14 +371,9 @@ async function loadUserVotes() {
     const userVotesRef = doc(db, 'userVotes', currentUserId);
     try {
         const docSnap = await getDoc(userVotesRef);
-        userVotes = (docSnap.exists() ? docSnap.data() : {}) || {}; // Ensure userVotes is an object
+        userVotes = (docSnap.exists() ? docSnap.data() : {}) || {};
         console.log("loadUserVotes: Votes loaded:", userVotes);
-    } catch (error) {
-        console.error("Error loading user votes:", error);
-        userVotes = {}; // Fallback to empty on error
-        // Optionally re-throw if initializeLikingSystem should halt on this error
-        // throw error;
-    }
+    } catch (error) { console.error("Error loading user votes:", error); userVotes = {}; throw error; }
 }
 
 async function ensureItemDocExists(itemId, initialData) {
@@ -331,7 +394,7 @@ async function ensureItemDocExists(itemId, initialData) {
         return docSnap.data();
     } catch (error) {
         console.error(`ensureItemDocExists: Error for item '${itemId}':`, error);
-        return null; // Indicate failure to caller
+        return null;
     }
 }
 
@@ -342,20 +405,19 @@ async function handleVote(itemId, newVoteType) {
     const userVotesRef = doc(db, 'userVotes', currentUserId);
     const previousUserVote = userVotes[itemId];
 
-    // Optimistic UI Update
-    const localItemBeforeVote = JSON.parse(JSON.stringify(itemsData[itemId] || {likes:0, dislikes:0, internalScore:5})); // Deep copy
-    const localUserVotesBeforeVote = JSON.parse(JSON.stringify(userVotes)); // Deep copy
+    const localItemBeforeVote = JSON.parse(JSON.stringify(itemsData[itemId] || {likes:0, dislikes:0, internalScore:5, element: null, h2Prefix: `${itemId}: `, originalOrder: -1 }));
+    const localUserVotesBeforeVote = JSON.parse(JSON.stringify(userVotes));
 
-    userVotes[itemId] = (previousUserVote === newVoteType) ? null : newVoteType;
-    if (!itemsData[itemId]) { // Should not happen if init is correct
+    if (!itemsData[itemId]) { // Safety net, though should be initialized
         itemsData[itemId] = { likes: 0, dislikes: 0, internalScore: 5, element: document.querySelector(`.box[data-item-id="${itemId}"]`), h2Prefix: `${itemId}: `, originalOrder: PREDEFINED_ITEMS_CONFIG.findIndex(i => i.id === itemId)};
     }
+    itemsData[itemId].element = localItemBeforeVote.element; // Preserve element reference if item was re-created
 
-
-    if (previousUserVote === newVoteType) { // Undoing vote
+    userVotes[itemId] = (previousUserVote === newVoteType) ? null : newVoteType;
+    if (previousUserVote === newVoteType) {
         if (newVoteType === 'like' && itemsData[itemId].likes > 0) itemsData[itemId].likes--;
         else if (newVoteType === 'dislike' && itemsData[itemId].dislikes > 0) itemsData[itemId].dislikes--;
-    } else { // New vote or switching
+    } else {
         if (previousUserVote === 'like' && itemsData[itemId].likes > 0) itemsData[itemId].likes--;
         else if (previousUserVote === 'dislike' && itemsData[itemId].dislikes > 0) itemsData[itemId].dislikes--;
         if (newVoteType === 'like') itemsData[itemId].likes++;
@@ -368,56 +430,39 @@ async function handleVote(itemId, newVoteType) {
     try {
         await runTransaction(db, async (transaction) => {
             const itemDocSnap = await transaction.get(itemRef);
-            if (!itemDocSnap.exists()) throw new Error(`Item document ${itemId} does not exist!`); // Make it an Error object
-            let currentLikes = itemDocSnap.data().likes || 0;
-            let currentDislikes = itemDocSnap.data().dislikes || 0;
-            let likeIncrement = 0; let dislikeIncrement = 0;
-
-            if (previousUserVote === newVoteType) { // Un-voting
-                if (newVoteType === 'like') likeIncrement = -1; else dislikeIncrement = -1;
-            } else { // Voting or changing vote
-                if (previousUserVote === 'like') likeIncrement = -1;
-                else if (previousUserVote === 'dislike') dislikeIncrement = -1;
-                if (newVoteType === 'like') likeIncrement += 1; else dislikeIncrement += 1;
-            }
-            const newLikes = Math.max(0, currentLikes + likeIncrement);
-            const newDislikes = Math.max(0, currentDislikes + dislikeIncrement);
-            transaction.update(itemRef, { likes: newLikes, dislikes: newDislikes });
-
-            const userVoteUpdate = {};
-            if (userVotes[itemId] === null) { // If un-voting
-                userVoteUpdate[itemId] = deleteField();
-            } else {
-                userVoteUpdate[itemId] = userVotes[itemId];
-            }
-            transaction.set(userVotesRef, userVoteUpdate, { merge: true });
+            if (!itemDocSnap.exists()) throw new Error(`Item document ${itemId} does not exist!`);
+            let cL = itemDocSnap.data().likes||0; let cD = itemDocSnap.data().dislikes||0;
+            let lI=0; let dI=0;
+            if(previousUserVote===newVoteType){if(newVoteType==='like')lI=-1;else dI=-1;}
+            else{if(previousUserVote==='like')lI=-1;else if(previousUserVote==='dislike')dI=-1; if(newVoteType==='like')lI+=1;else dI+=1;}
+            const nL=Math.max(0,cL+lI);const nD=Math.max(0,cD+dI);
+            transaction.update(itemRef,{likes:nL,dislikes:nD});
+            const uVU={};
+            if(userVotes[itemId]===null){uVU[itemId]=deleteField();}else{uVU[itemId]=userVotes[itemId];}
+            transaction.set(userVotesRef,uVU,{merge:true});
         });
         console.log(`Vote for ${itemId} (${newVoteType}) recorded in Firestore.`);
     } catch (error) {
         console.error("Vote transaction error for item " + itemId + ": ", error);
         alert("Failed to record vote. Your change has been reverted. Please try again.");
-        // Revert optimistic UI update
-        itemsData[itemId] = localItemBeforeVote;
-        userVotes = localUserVotesBeforeVote;
-        updateBoxDisplay(itemId);
-        renderSortedBoxes();
+        itemsData[itemId] = localItemBeforeVote; userVotes = localUserVotesBeforeVote;
+        updateBoxDisplay(itemId); renderSortedBoxes();
     }
 }
 
 function getVoteValue(voteNumber) { if (voteNumber <= 0) return 0; if (voteNumber <= 10) return 0.1; if (voteNumber <= 20) return 0.05; if (voteNumber <= 30) return 0.025; if (voteNumber <= 50) return 0.01; return 0.005; }
 function calculateRawVoteScore(count) { let score = 0; for (let i = 1; i <= count; i++) { score += getVoteValue(i); } return score; }
+function calculateInternalScore(likes, dislikes) {const rawLikeScore = calculateRawVoteScore(likes); const rawDislikeScore = calculateRawVoteScore(dislikes); return 5 + rawLikeScore - rawDislikeScore;}
 
 function updateBoxDisplay(itemId) {
     const item = itemsData[itemId];
-    if (!item || !item.element) { console.warn("updateBoxDisplay: no item/element for", itemId, "itemsData:", itemsData); return; }
-    const boxElement = item.element;
-    const h2 = boxElement.querySelector('h2');
-    const likeBtn = boxElement.querySelector('.like-btn');
-    const dislikeBtn = boxElement.querySelector('.dislike-btn');
-    const likesCountSpan = boxElement.querySelector('.likes-count');
-    const dislikesCountSpan = boxElement.querySelector('.dislikes-count');
+    if (!item || !item.element) { console.warn("updateBoxDisplay: no item/element for", itemId, "\ncurrent itemsData:", JSON.stringify(itemsData[itemId]), "\nall itemsData:", JSON.stringify(itemsData) ); return; }
+    const boxElement = item.element; const h2 = boxElement.querySelector('h2');
+    const likeBtn = boxElement.querySelector('.like-btn'); const dislikeBtn = boxElement.querySelector('.dislike-btn');
+    const likesCountSpan = boxElement.querySelector('.likes-count'); const dislikesCountSpan = boxElement.querySelector('.dislikes-count');
 
-    item.internalScore = calculateInternalScore(item.likes, item.dislikes); // Recalculate just in case
+    // Ensure internalScore is up-to-date before displaying
+    item.internalScore = calculateInternalScore(item.likes, item.dislikes);
     const displayScore = Math.max(0, Math.min(10, item.internalScore));
 
     if (h2) h2.textContent = `${item.h2Prefix}${displayScore.toFixed(1)}/10`;
@@ -439,6 +484,11 @@ function renderSortedBoxes() {
         if (b.internalScore !== a.internalScore) { return b.internalScore - a.internalScore; }
         return a.originalOrder - b.originalOrder;
     });
+    // Detach all existing children before re-appending to ensure order
+    // While appending an existing child moves it, clearing first can be safer if elements change
+    // while (mainContainer.firstChild) {
+    // mainContainer.removeChild(mainContainer.firstChild);
+    // }
     itemsArray.forEach(item => { mainContainer.appendChild(item.element); });
 }
 // --- END LIKING SYSTEM FUNCTIONS ---
