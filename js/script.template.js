@@ -1,4 +1,4 @@
-// js/script.template.js
+// js/script.js
 
 // --- Import necessary Firebase modules ---
 import { initializeApp } from "firebase/app";
@@ -25,55 +25,46 @@ let app;
 let auth;
 let db;
 
-// --- Firebase configuration placeholders (to be replaced by Netlify build command) ---
+// --- Your web app's Firebase configuration (HARCODED WITH YOUR ACTUAL VALUES) ---
 const firebaseConfig = {
-  apiKey: "__FIREBASE_API_KEY__",
-  authDomain: "__FIREBASE_AUTH_DOMAIN__",
-  projectId: "__FIREBASE_PROJECT_ID__",
-  storageBucket: "__FIREBASE_STORAGE_BUCKET__",
-  messagingSenderId: "__FIREBASE_MESSAGING_SENDER_ID__",
-  appId: "__FIREBASE_APP_ID__",
-  measurementId: "__FIREBASE_MEASUREMENT_ID__"
+  apiKey: "AIzaSyDoo957xiZB2heugMso-C6oS1jSjciLUq0", // YOUR ACTUAL VALUE
+  authDomain: "maroltingervote.firebaseapp.com",    // YOUR ACTUAL VALUE
+  projectId: "maroltingervote",                     // YOUR ACTUAL VALUE
+  storageBucket: "maroltingervote.appspot.com",     // YOUR ACTUAL VALUE
+  messagingSenderId: "536390639151",                // YOUR ACTUAL VALUE
+  appId: "1:536390639151:web:3f96ba960920552ecdb0da", // YOUR ACTUAL VALUE
+  measurementId: "G-4TRS7E6NGK"                     // YOUR ACTUAL VALUE (Make sure this is correct or remove if not using)
 };
 
 // --- Initialize Firebase (directly) ---
 try {
-    // This check runs in the browser AFTER Netlify's build command should have run.
-    // If apiKey still contains the placeholder, or is empty, the build step failed or env var was missing.
-    if (firebaseConfig.apiKey === "__FIREBASE_API_KEY__" || firebaseConfig.apiKey === "") {
-        throw new Error("Firebase config placeholders were not replaced during build, or API key is empty! Check Netlify build command and environment variables.");
-    }
     app = initializeApp(firebaseConfig);
     auth = getAuth(app);
     db = getFirestore(app);
-    console.log("%cFirebase initialized successfully (from build-time config).", "color: blue; font-weight: bold;");
-    console.log("Using projectId (from template):", firebaseConfig.projectId); // Log a non-sensitive part to verify
+    console.log("%cFirebase initialized successfully (HARCODED CONFIG).", "color: orange; font-weight: bold;");
 } catch (e) {
-    console.error("CRITICAL: Firebase initialization FAILED:", e);
+    console.error("CRITICAL: Firebase initialization FAILED (HARCODED CONFIG):", e);
     const errorDisplayInit = () => {
-        // Try to find a specific error display area, or fallback to body
-        let errorTarget = document.getElementById('auth-error') || document.getElementById('auth-container');
-        if (!errorTarget) errorTarget = document.body;
-
-        const errorMsgElement = document.createElement('p');
-        errorMsgElement.style.color = 'red';
-        errorMsgElement.style.fontSize = '18px';
-        errorMsgElement.style.padding = '20px';
-        errorMsgElement.textContent = 'Error: Application failed to initialize. Firebase setup error. Check console and Netlify build logs.';
-        
-        if (errorTarget === document.body) {
-            errorTarget.insertBefore(errorMsgElement, errorTarget.firstChild);
-        } else {
-            errorTarget.appendChild(errorMsgElement);
+        let errorTarget = document.getElementById('auth-container') || document.body;
+        if (errorTarget) { // Check if target exists before manipulating
+            const errorMsgElement = document.createElement('p');
+            errorMsgElement.style.color = 'red';
+            errorMsgElement.style.fontSize = '18px';
+            errorMsgElement.style.padding = '20px';
+            errorMsgElement.textContent = 'Error: Application failed to initialize. Firebase setup error. Check console.';
+            if (errorTarget === document.body) {
+                errorTarget.insertBefore(errorMsgElement, errorTarget.firstChild);
+            } else {
+                errorTarget.innerHTML = ''; // Clear previous content
+                errorTarget.appendChild(errorMsgElement);
+            }
         }
     };
-    // Wait for DOM to be ready before trying to manipulate it for the error message
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', errorDisplayInit);
     } else {
         errorDisplayInit();
     }
-    // The script will effectively stop useful execution here if Firebase init fails.
 }
 
 // --- DOM Elements (declared globally, assigned in initializeMainAppLogic) ---
@@ -93,7 +84,6 @@ const PREDEFINED_ITEMS_CONFIG = [
 const ALLOWED_DOMAIN = "maroltingergasse.at";
 
 
-// Function to initialize main app logic (DOM elements, event listeners, auth state)
 function initializeMainAppLogic() {
     console.log("%cinitializeMainAppLogic: Called.", "font-weight: bold;");
 
@@ -114,82 +104,52 @@ function initializeMainAppLogic() {
     authErrorP = document.getElementById('auth-error');
     mainContentWrapper = document.getElementById('main-content-wrapper');
     authRequiredMessage = document.getElementById('auth-required-message');
-    verificationMessageP = document.getElementById('verification-message'); // Should exist from DOMContentLoaded
+    verificationMessageP = document.getElementById('verification-message');
 
     if (!loginButton || !authContainer || !mainContentWrapper || !userInfoDisplay || !registerButton || !logoutButton || !verificationMessageP) {
         console.error("CRITICAL: Essential DOM elements missing in initializeMainAppLogic!");
         if (authErrorP) authErrorP.textContent = "Error: Critical UI elements missing.";
-        else { // If authErrorP itself is missing, add error to body
-            const errorMsgDom = document.createElement('p');
-            errorMsgDom.style.color = 'red';
+        else {
+            const errorMsgDom = document.createElement('p'); errorMsgDom.style.color = 'red';
             errorMsgDom.textContent = 'Critical UI elements missing.';
-            document.body.insertBefore(errorMsgDom, document.body.firstChild);
+            if(document.body && document.body.firstChild) document.body.insertBefore(errorMsgDom, document.body.firstChild); else if (document.body) document.body.appendChild(errorMsgDom);
         }
         return;
     }
 
-    // --- AUTHENTICATION LOGIC ---
     onAuthStateChanged(auth, async (user) => {
         console.log("%cON AUTH STATE CHANGED (main logic):", "color: blue; font-weight: bold;", user);
         if(authErrorP) authErrorP.textContent = '';
-
         if (user) {
-            console.log("onAuthStateChanged: User present. Reloading...");
             try { await user.reload(); } catch (e) { console.error("Auth reload err:", e); }
             const freshUser = auth.currentUser;
-            console.log("onAuthStateChanged: Fresh user:", freshUser);
-
             if (!freshUser) {
-                console.log("onAuthStateChanged: User null after reload. UI to signed out.");
-                authContainer.style.display = 'block'; loginView.style.display = 'block';
-                registerView.style.display = 'none'; userInfoDisplay.style.display = 'none';
-                mainContentWrapper.style.display = 'none'; authRequiredMessage.style.display = 'block';
-                if(verificationMessageP) verificationMessageP.style.display = 'none';
-                return;
+                authContainer.style.display = 'block'; loginView.style.display = 'block'; registerView.style.display = 'none'; userInfoDisplay.style.display = 'none'; mainContentWrapper.style.display = 'none'; authRequiredMessage.style.display = 'block'; if(verificationMessageP) verificationMessageP.style.display = 'none'; return;
             }
-
             if (freshUser.email && freshUser.email.toLowerCase().endsWith(`@${ALLOWED_DOMAIN}`)) {
                 if (freshUser.emailVerified) {
                     console.log("%cAccess GRANTED: " + freshUser.email, "color: green;");
-                    authContainer.style.display = 'none'; userInfoDisplay.style.display = 'block';
-                    userEmailSpan.textContent = freshUser.email; mainContentWrapper.style.display = 'block';
-                    authRequiredMessage.style.display = 'none'; if(verificationMessageP) verificationMessageP.style.display = 'none';
+                    authContainer.style.display = 'none'; userInfoDisplay.style.display = 'block'; userEmailSpan.textContent = freshUser.email; mainContentWrapper.style.display = 'block'; authRequiredMessage.style.display = 'none'; if(verificationMessageP) verificationMessageP.style.display = 'none';
                     initializeLikingSystem();
                 } else {
                     console.log("PENDING VERIFICATION: " + freshUser.email);
-                    authContainer.style.display = 'none'; userInfoDisplay.style.display = 'block';
-                    userEmailSpan.textContent = `${freshUser.email} (Unverified)`;
-                    mainContentWrapper.style.display = 'none'; authRequiredMessage.style.display = 'none';
+                    authContainer.style.display = 'none'; userInfoDisplay.style.display = 'block'; userEmailSpan.textContent = `${freshUser.email} (Unverified)`; mainContentWrapper.style.display = 'none'; authRequiredMessage.style.display = 'none';
                     if(verificationMessageP) {
-                        verificationMessageP.innerHTML = `Verify <strong>${freshUser.email}</strong>. <button id="resend-verification-btn">Resend</button>`;
-                        verificationMessageP.style.display = 'block';
+                        verificationMessageP.innerHTML = `Verify <strong>${freshUser.email}</strong>. <button id="resend-verification-btn">Resend</button>`; verificationMessageP.style.display = 'block';
                         const resendBtn = document.getElementById('resend-verification-btn');
-                        if(resendBtn) {
-                            resendBtn.onclick = () => sendEmailVerification(freshUser)
-                                .then(() => {
-                                    verificationMessageP.innerHTML = `Resent to <strong>${freshUser.email}</strong> (Btn in 20s)`;
-                                    setTimeout(() => { if(verificationMessageP && verificationMessageP.style.display === 'block' && auth.currentUser && !auth.currentUser.emailVerified) verificationMessageP.innerHTML = `Verify <strong>${freshUser.email}</strong>. <button id="resend-verification-btn">Resend</button>`; }, 20000);
-                                }).catch(e => { if(authErrorP) authErrorP.textContent="Resend err: "+e.message; });
-                        }
+                        if(resendBtn) resendBtn.onclick = () => sendEmailVerification(freshUser).then(() => { verificationMessageP.innerHTML = `Resent to <strong>${freshUser.email}</strong> (Btn in 20s)`; setTimeout(() => { if(verificationMessageP && verificationMessageP.style.display === 'block' && auth.currentUser && !auth.currentUser.emailVerified) verificationMessageP.innerHTML = `Verify <strong>${freshUser.email}</strong>. <button id="resend-verification-btn">Resend</button>`; }, 20000); }).catch(e => { if(authErrorP) authErrorP.textContent="Resend err: "+e.message; });
                     }
                 }
             } else {
                 console.warn("WRONG DOMAIN: " + freshUser.email);
-                if(authErrorP) authErrorP.textContent = `Denied. Use @${ALLOWED_DOMAIN}. You used: ${freshUser.email || 'N/A'}`;
+                if(authErrorP) authErrorP.textContent = `Denied. Use @${ALLOWED_DOMAIN}. Provided: ${freshUser.email || 'N/A'}`;
                 signOut(auth).catch(e => console.error("Signout err:", e));
-                authContainer.style.display = 'block'; loginView.style.display = 'block';
-                registerView.style.display = 'none'; userInfoDisplay.style.display = 'none';
-                mainContentWrapper.style.display = 'none'; authRequiredMessage.style.display = 'none';
-                if(verificationMessageP) verificationMessageP.style.display = 'none';
+                authContainer.style.display = 'block'; loginView.style.display = 'block'; registerView.style.display = 'none'; userInfoDisplay.style.display = 'none'; mainContentWrapper.style.display = 'none'; authRequiredMessage.style.display = 'none'; if(verificationMessageP) verificationMessageP.style.display = 'none';
             }
         } else {
             console.log("SIGNED OUT.");
-            authContainer.style.display = 'block'; loginView.style.display = 'block';
-            registerView.style.display = 'none'; userInfoDisplay.style.display = 'none';
-            mainContentWrapper.style.display = 'none'; authRequiredMessage.style.display = 'block';
-            if (verificationMessageP && !verificationMessageP.innerHTML.includes("Registration successful")) {
-                verificationMessageP.style.display = 'none';
-            }
+            authContainer.style.display = 'block'; loginView.style.display = 'block'; registerView.style.display = 'none'; userInfoDisplay.style.display = 'none'; mainContentWrapper.style.display = 'none'; authRequiredMessage.style.display = 'block';
+            if (verificationMessageP && !verificationMessageP.innerHTML.includes("Registration successful")) verificationMessageP.style.display = 'none';
         }
     });
 
@@ -223,13 +183,9 @@ function initializeMainAppLogic() {
     console.log("Main app event listeners initialized.");
 }
 
-
-// This is the first part of the script that runs after imports and Firebase init
-console.log("script.template.js: Parsed. Waiting for DOMContentLoaded.");
-
+console.log("script.js: Parsed. Waiting for DOMContentLoaded.");
 document.addEventListener('DOMContentLoaded', () => {
-    console.log("script.template.js: DOMContentLoaded event fired.");
-
+    console.log("script.js: DOMContentLoaded event fired.");
     if (!document.getElementById('verification-message')) {
         verificationMessageP = document.createElement('p');
         verificationMessageP.id = 'verification-message';
@@ -237,22 +193,33 @@ document.addEventListener('DOMContentLoaded', () => {
         verificationMessageP.style.display = 'none';
         const tempAuthContainer = document.getElementById('auth-container');
         if (tempAuthContainer && tempAuthContainer.parentNode) tempAuthContainer.parentNode.insertBefore(verificationMessageP, tempAuthContainer);
-        else if (document.body) document.body.appendChild(verificationMessageP); // Simpler fallback
+        else if (document.body) document.body.appendChild(verificationMessageP);
         else console.error("Cannot insert verificationMessageP!");
     } else {
         verificationMessageP = document.getElementById('verification-message');
     }
 
-    if (app && auth && db) { // Check if Firebase was successfully initialized at the top
+    if (app && auth && db) {
         initializeMainAppLogic();
     } else {
-        console.error("CRITICAL: Firebase not initialized globally (app, auth, or db is missing). Main app logic cannot start. Check top-level Firebase init.");
-        // The error message from the top-level try/catch around Firebase init should already be on screen.
+        console.error("CRITICAL: Firebase not initialized globally. Main app logic cannot start. Check top-level Firebase init.");
     }
 });
 
-
 // --- LIKING/RANKING SYSTEM FUNCTIONS ---
+async function initializeLikingSystem() { /* ... same full function as before ... */ }
+async function loadUserVotes() { /* ... same full function as before ... */ }
+async function ensureItemDocExists(itemId, initialData) { /* ... same full function as before ... */ }
+async function handleVote(itemId, newVoteType) { /* ... same full function as before ... */ }
+function getVoteValue(voteNumber) { /* ... same full function as before ... */ }
+function calculateRawVoteScore(count) { /* ... same full function as before ... */ }
+function calculateInternalScore(likes, dislikes) { /* ... same full function as before ... */ }
+function updateBoxDisplay(itemId) { /* ... same full function as before ... */ }
+function renderSortedBoxes() { /* ... same full function as before ... */ }
+// Ensure the full bodies of these functions are present below, copied from the last version.
+// For brevity here, I've put placeholders, but you need the actual code.
+// (Actually, I'll paste them for completeness to avoid issues)
+
 async function initializeLikingSystem() {
     console.log("%c--- initializeLikingSystem CALLED ---", "color: purple; font-weight: bold;");
     if (auth.currentUser && auth.currentUser.emailVerified) {
@@ -274,7 +241,7 @@ async function initializeLikingSystem() {
         const boxElement = document.createElement('div'); boxElement.className = 'box'; boxElement.dataset.itemId = itemId;
         const h2 = document.createElement('h2');
         const voteControls = document.createElement('div'); voteControls.className = 'vote-controls';
-        voteControls.innerHTML = `<button class="like-btn">👍<span class="likes-count">(0)</span></button><button class="dislike-btn">👎<span class="dislikes-count">(0)</span></button>`;
+        voteControls.innerHTML = `<button class="like-btn" aria-label="Like">👍<span class="likes-count">(0)</span></button><button class="dislike-btn" aria-label="Dislike">👎<span class="dislikes-count">(0)</span></button>`;
         boxElement.appendChild(h2); boxElement.appendChild(voteControls); mainContainer.appendChild(boxElement);
         itemsData[itemId] = {
             likes: firestoreItemData.likes, dislikes: firestoreItemData.dislikes,
@@ -297,7 +264,7 @@ async function initializeLikingSystem() {
 }
 async function loadUserVotes() {if (!currentUserId) {userVotes={}; return;} const ref=doc(db,'userVotes',currentUserId); try {const d=await getDoc(ref); userVotes=(d.exists()?d.data():{})||{};} catch(e){console.error("LoadUserVotes err:",e);userVotes={};throw e;}}
 async function ensureItemDocExists(itemId, initialData) {const ref=doc(db,'items',itemId); try {const d=await getDoc(ref); if(!d.exists()){const ds={likes:initialData.initialLikes||0,dislikes:initialData.initialDislikes||0}; await setDoc(ref,ds); return ds;} return d.data();} catch(e){console.error(`EnsureItem err ${itemId}:`,e);return null;}}
-async function handleVote(itemId, voteType) { if(!currentUserId || !auth.currentUser || !auth.currentUser.emailVerified){alert("Login & verify.");return;} const iR=doc(db,'items',itemId); const uVR=doc(db,'userVotes',currentUserId); const pUV=userVotes[itemId]; const lIB=JSON.parse(JSON.stringify(itemsData[itemId]||{l:0,d:0,iS:5,eN:null,hP:`${itemId}: `,oO:-1})); const lUVB=JSON.parse(JSON.stringify(userVotes)); if(!itemsData[itemId]){itemsData[itemId]={l:0,d:0,iS:5,eN:document.querySelector(`.box[data-item-id="${itemId}"]`),hP:`${itemId}: `,oO:PREDEFINED_ITEMS_CONFIG.findIndex(i=>i.id===itemId)};} itemsData[itemId].element=lIB.element; userVotes[itemId]=(pUV===voteType)?null:voteType; if(pUV===voteType){if(voteType==='like'&&itemsData[itemId].likes>0)itemsData[itemId].likes--;else if(voteType==='dislike'&&itemsData[itemId].dislikes>0)itemsData[itemId].dislikes--;}else{if(pUV==='like'&&itemsData[itemId].likes>0)itemsData[itemId].likes--;else if(pUV==='dislike'&&itemsData[itemId].dislikes>0)itemsData[itemId].dislikes--; if(voteType==='like')itemsData[itemId].likes++;else itemsData[itemId].dislikes++;} itemsData[itemId].internalScore=calculateInternalScore(itemsData[itemId].likes,itemsData[itemId].dislikes); updateBoxDisplay(itemId);renderSortedBoxes(); try{await runTransaction(db,async t=>{const iDS=await t.get(iR);if(!iDS.exists())throw new Error(`Item ${itemId} missing!`);let cL=iDS.data().likes||0;let cD=iDS.data().dislikes||0;let lI=0,dI=0;if(pUV===voteType){if(voteType==='like')lI=-1;else dI=-1;}else{if(pUV==='like')lI=-1;else if(pUV==='dislike')dI=-1;if(voteType==='like')lI+=1;else dI+=1;}const nL=Math.max(0,cL+lI);const nD=Math.max(0,cD+dI);t.update(iR,{likes:nL,dislikes:nD});const uVU={};if(userVotes[itemId]===null)uVU[itemId]=deleteField();else uVU[itemId]=userVotes[itemId];t.set(uVR,uVU,{merge:true});});}catch(e){console.error(`Vote err ${itemId}:`,e);alert("Vote fail.Reverted.");itemsData[itemId]=lIB;userVotes=lUVB;updateBoxDisplay(itemId);renderSortedBoxes();}}
+async function handleVote(itemId, voteType) { if(!currentUserId || !auth.currentUser || !auth.currentUser.emailVerified){alert("Login & verify.");return;} const iR=doc(db,'items',itemId); const uVR=doc(db,'userVotes',currentUserId); const pUV=userVotes[itemId]; const lIB=JSON.parse(JSON.stringify(itemsData[itemId]||{likes:0,dislikes:0,internalScore:5,element:null,h2Prefix:`${itemId}: `,originalOrder:-1})); const lUVB=JSON.parse(JSON.stringify(userVotes)); if(!itemsData[itemId]){itemsData[itemId]={likes:0,dislikes:0,internalScore:5,element:document.querySelector(`.box[data-item-id="${itemId}"]`),h2Prefix:`${itemId}: `,originalOrder:PREDEFINED_ITEMS_CONFIG.findIndex(i=>i.id===itemId)};} itemsData[itemId].element=lIB.element; userVotes[itemId]=(pUV===voteType)?null:voteType; if(pUV===voteType){if(voteType==='like'&&itemsData[itemId].likes>0)itemsData[itemId].likes--;else if(voteType==='dislike'&&itemsData[itemId].dislikes>0)itemsData[itemId].dislikes--;}else{if(pUV==='like'&&itemsData[itemId].likes>0)itemsData[itemId].likes--;else if(pUV==='dislike'&&itemsData[itemId].dislikes>0)itemsData[itemId].dislikes--; if(voteType==='like')itemsData[itemId].likes++;else itemsData[itemId].dislikes++;} itemsData[itemId].internalScore=calculateInternalScore(itemsData[itemId].likes,itemsData[itemId].dislikes); updateBoxDisplay(itemId);renderSortedBoxes(); try{await runTransaction(db,async t=>{const iDS=await t.get(iR);if(!iDS.exists())throw new Error(`Item ${itemId} missing!`);let cL=iDS.data().likes||0;let cD=iDS.data().dislikes||0;let lI=0,dI=0;if(pUV===voteType){if(voteType==='like')lI=-1;else dI=-1;}else{if(pUV==='like')lI=-1;else if(pUV==='dislike')dI=-1;if(voteType==='like')lI+=1;else dI+=1;}const nL=Math.max(0,cL+lI);const nD=Math.max(0,cD+dI);t.update(iR,{likes:nL,dislikes:nD});const uVU={};if(userVotes[itemId]===null)uVU[itemId]=deleteField();else uVU[itemId]=userVotes[itemId];t.set(uVR,uVU,{merge:true});});}catch(e){console.error(`Vote err ${itemId}:`,e);alert("Vote fail.Reverted.");itemsData[itemId]=lIB;userVotes=lUVB;updateBoxDisplay(itemId);renderSortedBoxes();}}
 function getVoteValue(vN){if(vN<=0)return 0;if(vN<=10)return 0.1;if(vN<=20)return 0.05;if(vN<=30)return 0.025;if(vN<=50)return 0.01;return 0.005;}
 function calculateRawVoteScore(c){let s=0;for(let i=1;i<=c;i++)s+=getVoteValue(i);return s;}
 function calculateInternalScore(l,d){return 5+calculateRawVoteScore(l)-calculateRawVoteScore(d);}
