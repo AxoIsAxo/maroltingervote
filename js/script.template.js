@@ -1,4 +1,4 @@
-// js/script.js
+// js/script.template.js
 
 // --- Import necessary Firebase modules ---
 import { initializeApp } from "firebase/app";
@@ -20,13 +20,53 @@ import {
     onSnapshot
 } from "firebase/firestore";
 
-// --- Firebase app, auth, db will be initialized by initApp() ---
+// --- Firebase app, auth, db will be initialized ---
 let app;
 let auth;
 let db;
 
+// --- Firebase configuration placeholders (to be replaced by Netlify build command) ---
+const firebaseConfig = {
+  apiKey: "__FIREBASE_API_KEY__",
+  authDomain: "__FIREBASE_AUTH_DOMAIN__",
+  projectId: "__FIREBASE_PROJECT_ID__",
+  storageBucket: "__FIREBASE_STORAGE_BUCKET__",
+  messagingSenderId: "__FIREBASE_MESSAGING_SENDER_ID__",
+  appId: "__FIREBASE_APP_ID__",
+  measurementId: "__FIREBASE_MEASUREMENT_ID__" // Will be empty if FIREBASE_MEASUREMENT_ID is not set in Netlify
+};
+
+// --- Initialize Firebase (directly) ---
+try {
+    // Check if placeholders were ACTUALLY replaced during build.
+    // If apiKey still contains the placeholder, the build step failed or wasn't run.
+    if (firebaseConfig.apiKey === "__FIREBASE_API_KEY__" || firebaseConfig.apiKey === "") {
+        // This check runs in the browser. If placeholders are still here,
+        // it means the build command didn't work or wasn't set up.
+        throw new Error("Firebase config placeholders were not replaced during build, or API key is empty! Check Netlify build command and environment variables.");
+    }
+    app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    db = getFirestore(app);
+    console.log("%cFirebase initialized successfully (from build-time config).", "color: blue; font-weight: bold;");
+    console.log("Using projectId:", firebaseConfig.projectId); // Log a non-sensitive part to verify
+} catch (e) {
+    console.error("CRITICAL: Firebase initialization FAILED:", e);
+    // Attempt to display error to user if DOM is somewhat ready
+    const errorDisplay = () => {
+        const target = document.getElementById('auth-container') || document.body;
+        target.innerHTML = "<p style='color:red; font-size:18px; padding:20px;'>Error: Application failed to initialize. Firebase setup error. Check console and Netlify build logs.</p>" + (target === document.body ? "" : target.innerHTML);
+    };
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', errorDisplay);
+    } else {
+        errorDisplay();
+    }
+    // We can't proceed if Firebase isn't initialized.
+    // The script will effectively stop useful execution here.
+}
+
 // --- DOM Elements (to be fetched inside initializeMainAppLogic or DOMContentLoaded) ---
-// verificationMessageP is declared here, but created and assigned in DOMContentLoaded
 let authContainer, loginView, registerView, showRegisterLink, showLoginLink,
     loginEmailInput, loginPasswordInput, loginButton,
     registerEmailInput, registerPasswordInput, registerButton,
@@ -34,11 +74,7 @@ let authContainer, loginView, registerView, showRegisterLink, showLoginLink,
     mainContentWrapper, authRequiredMessage, verificationMessageP;
 
 // --- Liking System Variables ---
-let itemsData = {};
-let userVotes = {};
-let currentUserId = null;
-let itemListeners = [];
-
+let itemsData = {}; let userVotes = {}; let currentUserId = null; let itemListeners = [];
 const PREDEFINED_ITEMS_CONFIG = [
     { id: "POT", initialLikes: 0, initialDislikes: 0 },
     { id: "MAI", initialLikes: 0, initialDislikes: 0 },
@@ -47,25 +83,11 @@ const PREDEFINED_ITEMS_CONFIG = [
 const ALLOWED_DOMAIN = "maroltingergasse.at";
 
 
-// Function to initialize everything AFTER config is confirmed AND DOM is ready
+// Function to initialize everything AFTER DOM is ready AND Firebase is initialized
 function initializeMainAppLogic() {
-    console.log("%cinitializeMainAppLogic: Firebase config confirmed, proceeding.", "font-weight: bold;");
+    console.log("%cinitializeMainAppLogic: Called.", "font-weight: bold;");
 
-    // --- Initialize Firebase using the confirmed global config ---
-    const firebaseConfig = window.firebaseConfigFromNetlify;
-
-    try {
-        app = initializeApp(firebaseConfig);
-        auth = getAuth(app);
-        db = getFirestore(app);
-        console.log("Firebase initialized successfully within initializeMainAppLogic.");
-    } catch (e) {
-        console.error("CRITICAL: Firebase initialization FAILED within initializeMainAppLogic:", e);
-        document.body.innerHTML = "<p style='color:red; font-size:18px; padding:20px;'>Error: App init failed (Firebase). Check console.</p>";
-        return;
-    }
-
-    // Get DOM Elements now that DOM is ready and Firebase is init
+    // Get DOM Elements now that DOM is ready
     authContainer = document.getElementById('auth-container');
     loginView = document.getElementById('login-view');
     registerView = document.getElementById('register-view');
@@ -83,16 +105,21 @@ function initializeMainAppLogic() {
     authErrorP = document.getElementById('auth-error');
     mainContentWrapper = document.getElementById('main-content-wrapper');
     authRequiredMessage = document.getElementById('auth-required-message');
-    // verificationMessageP should have been created and inserted by the DOMContentLoaded listener
+
+    // verificationMessageP is created and inserted in the DOMContentLoaded listener below
+    // We just need a reference if it was successfully created.
+    verificationMessageP = document.getElementById('verification-message');
+
 
     if (!loginButton || !authContainer || !mainContentWrapper || !userInfoDisplay || !registerButton || !logoutButton || !verificationMessageP) {
-        console.error("CRITICAL: One or more essential DOM elements for app logic were not found or verificationMessageP not ready!");
-        // Avoid overwriting body if verificationMessageP is the only issue and it logs its own creation problem
-        if(!verificationMessageP) document.body.innerHTML = "<p style='color:red; font-size:18px; padding:20px;'>Error: UI elements missing. App cannot start.</p>";
+        console.error("CRITICAL: One or more essential DOM elements for app logic were not found after DOMContentLoaded!");
+        // Avoid aggressive body.innerHTML overwrite if some parts are there
+        if (authErrorP) authErrorP.textContent = "Error: Critical UI elements missing.";
+        else document.body.insertAdjacentHTML('afterbegin', "<p style='color:red;'>Critical UI elements missing.</p>");
         return;
     }
 
-    // --- AUTHENTICATION LOGIC ---
+    // --- AUTHENTICATION LOGIC --- (This is from your last provided full script)
     onAuthStateChanged(auth, async (user) => {
         console.log("%cON AUTH STATE CHANGED (main logic):", "color: blue; font-weight: bold;", user);
         if(authErrorP) authErrorP.textContent = '';
@@ -230,16 +257,15 @@ function initializeMainAppLogic() {
 } // End of initializeMainAppLogic
 
 
-// This part runs when script.js is parsed
-console.log("script.js: Parsed. Waiting for DOMContentLoaded and Firebase config snippet.");
+// This is the first part of the script that runs after imports and global Firebase init
+console.log("script.js: Parsed. Waiting for DOMContentLoaded.");
 
 document.addEventListener('DOMContentLoaded', () => {
     console.log("script.js: DOMContentLoaded event fired.");
-    console.log("script.js: Checking for window.firebaseConfigFromNetlify on DOMContentLoaded:", window.firebaseConfigFromNetlify);
 
-    // --- CREATE and INSERT verificationMessageP ---
+    // Create and insert verificationMessageP into the DOM here, once.
     if (!document.getElementById('verification-message')) {
-        verificationMessageP = document.createElement('p'); // Assign to the globally declared variable
+        verificationMessageP = document.createElement('p');
         verificationMessageP.id = 'verification-message';
         verificationMessageP.className = 'info-message';
         verificationMessageP.style.display = 'none';
@@ -250,92 +276,58 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log("verificationMessageP inserted before auth-container.");
         } else if (document.body && document.body.firstChild) {
             document.body.insertBefore(verificationMessageP, document.body.firstChild);
-            console.log("verificationMessageP inserted at start of body (fallback).");
         } else if (document.body) {
             document.body.appendChild(verificationMessageP);
-            console.log("verificationMessageP appended to body (fallback).");
         } else {
             console.error("Could not find a place to insert verificationMessageP!");
         }
     } else {
-        verificationMessageP = document.getElementById('verification-message'); // Get ref if already exists
-        console.log("verificationMessageP already exists in DOM.");
+        verificationMessageP = document.getElementById('verification-message');
     }
 
-    // --- Check for Firebase Config and Initialize App Logic ---
-    if (window.firebaseConfigFromNetlify &&
-        window.firebaseConfigFromNetlify.apiKey &&
-        window.firebaseConfigFromNetlify.apiKey !== "" &&
-        window.firebaseConfigFromNetlify.apiKey !== "{{ env.FIREBASE_API_KEY }}") {
-
-        console.log("script.js: Firebase config FOUND and POPULATED on DOMContentLoaded. Calling initializeMainAppLogic().");
+    // Call initializeMainAppLogic now that DOM is ready and Firebase should be initialized
+    // (or an error displayed if Firebase init failed at the top level)
+    if (app && auth && db) { // Check if Firebase was successfully initialized at the top
         initializeMainAppLogic();
     } else {
-        console.warn("script.js: Firebase config NOT found/populated on DOMContentLoaded. Will try again in 500ms.");
-        console.log("script.js: Current value of window.firebaseConfigFromNetlify:", window.firebaseConfigFromNetlify);
-
-        setTimeout(() => {
-            console.log("script.js: Checking for window.firebaseConfigFromNetlify after 500ms timeout.");
-            console.log("script.js: Value after timeout:", window.firebaseConfigFromNetlify);
-            if (window.firebaseConfigFromNetlify &&
-                window.firebaseConfigFromNetlify.apiKey &&
-                window.firebaseConfigFromNetlify.apiKey !== "" &&
-                window.firebaseConfigFromNetlify.apiKey !== "{{ env.FIREBASE_API_KEY }}") {
-
-                console.log("script.js: Firebase config FOUND and POPULATED after timeout. Calling initializeMainAppLogic().");
-                initializeMainAppLogic();
-            } else {
-                console.error("CRITICAL (after timeout): Firebase configuration from Netlify NOT FOUND or not populated!");
-                console.log("window.firebaseConfigFromNetlify (after timeout) is:", window.firebaseConfigFromNetlify);
-                let errorDisplayArea = document.getElementById('auth-container') || document.body;
-                errorDisplayArea.innerHTML = "<p style='color:red; font-size:18px; padding:20px;'>Error: Application configuration is missing. Please double-check Netlify environment variables and snippet injection settings, then ensure you've triggered a new deploy on Netlify.</p>" + (errorDisplayArea === document.body ? "" : errorDisplayArea.innerHTML); // Avoid duplicating body content
-            }
-        }, 500);
+        console.error("CRITICAL: Firebase not initialized globally. Main app logic cannot start.");
+        // Error message should already be on screen from the top-level try/catch
     }
 });
 
-// --- LIKING/RANKING SYSTEM FUNCTIONS (Must be accessible by initializeMainAppLogic) ---
+
+// --- LIKING/RANKING SYSTEM FUNCTIONS ---
 async function initializeLikingSystem() {
     console.log("%c--- initializeLikingSystem CALLED ---", "color: purple; font-weight: bold;");
     if (auth.currentUser && auth.currentUser.emailVerified) {
         currentUserId = auth.currentUser.uid;
         console.log("initializeLikingSystem: User is valid. UID:", currentUserId);
     } else {
-        console.error("initializeLikingSystem: Pre-condition not met (user not logged in or verified). Aborting.");
+        console.error("initializeLikingSystem: Pre-condition not met. Aborting.");
         if(mainContentWrapper) mainContentWrapper.style.display = 'none';
         if(authRequiredMessage) authRequiredMessage.style.display = auth.currentUser && !auth.currentUser.emailVerified ? 'none' : 'block';
         return;
     }
 
     itemListeners.forEach(unsubscribe => unsubscribe()); itemListeners = [];
-    try {
-        await loadUserVotes();
-        console.log("initializeLikingSystem: User votes loaded:", userVotes);
-    } catch (e) { console.error("initializeLikingSystem: Error during loadUserVotes:", e); userVotes = {}; }
+    try { await loadUserVotes(); console.log("initializeLikingSystem: User votes loaded:", userVotes); }
+    catch (e) { console.error("initializeLikingSystem: Error during loadUserVotes:", e); userVotes = {}; }
 
     const mainContainer = document.querySelector('.main');
     if (!mainContainer) { console.error("initializeLikingSystem: CRITICAL - '.main' container NOT FOUND."); return; }
-    console.log("initializeLikingSystem: '.main' container found. Clearing content.");
     mainContainer.innerHTML = ''; itemsData = {};
-
     console.log("initializeLikingSystem: Processing PREDEFINED_ITEMS_CONFIG. Count:", PREDEFINED_ITEMS_CONFIG.length);
-    if (PREDEFINED_ITEMS_CONFIG.length === 0) console.warn("initializeLikingSystem: PREDEFINED_ITEMS_CONFIG is empty.");
 
     for (const pItemConfig of PREDEFINED_ITEMS_CONFIG) {
         const itemId = pItemConfig.id; const h2Prefix = `${itemId}: `;
-        console.log(`initializeLikingSystem: Processing item '${itemId}'`);
-
         const firestoreItemData = await ensureItemDocExists(itemId, pItemConfig);
-        if (!firestoreItemData) { console.warn(`initializeLikingSystem: Skipping item '${itemId}' - no Firestore data.`); continue; }
-        console.log(`initializeLikingSystem: Firestore data for '${itemId}':`, firestoreItemData);
+        if (!firestoreItemData) { console.warn(`initializeLikingSystem: Skipping item '${itemId}'.`); continue; }
 
         const boxElement = document.createElement('div'); boxElement.className = 'box'; boxElement.dataset.itemId = itemId;
         const h2 = document.createElement('h2');
         const voteControls = document.createElement('div'); voteControls.className = 'vote-controls';
         voteControls.innerHTML = `<button class="like-btn" aria-label="Like">👍<span class="likes-count">(0)</span></button><button class="dislike-btn" aria-label="Dislike">👎<span class="dislikes-count">(0)</span></button>`;
-        boxElement.appendChild(h2); boxElement.appendChild(voteControls);
-        mainContainer.appendChild(boxElement);
-        console.log(`initializeLikingSystem: Appended box for '${itemId}'.`);
+        boxElement.appendChild(h2); boxElement.appendChild(voteControls); mainContainer.appendChild(boxElement);
 
         itemsData[itemId] = {
             likes: firestoreItemData.likes, dislikes: firestoreItemData.dislikes,
@@ -348,147 +340,36 @@ async function initializeLikingSystem() {
 
         const itemRef = doc(db, 'items', itemId);
         const unsubscribe = onSnapshot(itemRef, (docSnap) => {
-            // console.log(`Realtime update for ${itemId}:`, docSnap.data()); // Can be noisy
             if (docSnap.exists()) {
                 const updatedData = docSnap.data();
                 if (itemsData[itemId] && (itemsData[itemId].likes !== updatedData.likes || itemsData[itemId].dislikes !== updatedData.dislikes)) {
-                    console.log(`Applying realtime update for ${itemId}`);
                     itemsData[itemId].likes = updatedData.likes; itemsData[itemId].dislikes = updatedData.dislikes;
-                    itemsData[itemId].internalScore = calculateInternalScore(updatedData.likes, updatedData.dislikes);
-                    updateBoxDisplay(itemId); renderSortedBoxes();
+                    updateBoxDisplay(itemId); renderSortedBoxes(); // internalScore updated in updateBoxDisplay
                 }
             }
         }, error => { console.error(`Error listening to item ${itemId}:`, error); });
         itemListeners.push(unsubscribe);
     }
-    renderSortedBoxes();
-    console.log("initializeLikingSystem: Initialization complete. Final itemsData:", itemsData);
+    renderSortedBoxes(); console.log("initializeLikingSystem: Initialization complete.");
 }
 
-async function loadUserVotes() {
-    if (!currentUserId) { console.log("loadUserVotes: No currentUserId."); userVotes = {}; return; }
-    console.log("loadUserVotes: Loading for", currentUserId);
-    const userVotesRef = doc(db, 'userVotes', currentUserId);
-    try {
-        const docSnap = await getDoc(userVotesRef);
-        userVotes = (docSnap.exists() ? docSnap.data() : {}) || {};
-        console.log("loadUserVotes: Votes loaded:", userVotes);
-    } catch (error) { console.error("Error loading user votes:", error); userVotes = {}; throw error; }
-}
+async function loadUserVotes() { /* ... same as before ... */ }
+async function ensureItemDocExists(itemId, initialData) { /* ... same as before ... */ }
+async function handleVote(itemId, newVoteType) { /* ... same as before ... */ }
+function getVoteValue(voteNumber) { /* ... same as before ... */ }
+function calculateRawVoteScore(count) { /* ... same as before ... */ }
+function calculateInternalScore(likes, dislikes) { /* ... same as before ... */ }
+function updateBoxDisplay(itemId) { /* ... same as before ... */ }
+function renderSortedBoxes() { /* ... same as before ... */ }
 
-async function ensureItemDocExists(itemId, initialData) {
-    console.log(`ensureItemDocExists: Checking for '${itemId}'`);
-    const itemRef = doc(db, 'items', itemId);
-    try {
-        const docSnap = await getDoc(itemRef);
-        if (!docSnap.exists()) {
-            const dataToSet = {
-                likes: initialData.initialLikes !== undefined ? initialData.initialLikes : 0,
-                dislikes: initialData.initialDislikes !== undefined ? initialData.initialDislikes : 0,
-            };
-            await setDoc(itemRef, dataToSet);
-            console.log(`ensureItemDocExists: Created item doc for ${itemId} with data:`, dataToSet);
-            return dataToSet;
-        }
-        console.log(`ensureItemDocExists: Found existing doc for '${itemId}':`, docSnap.data());
-        return docSnap.data();
-    } catch (error) {
-        console.error(`ensureItemDocExists: Error for item '${itemId}':`, error);
-        return null;
-    }
-}
-
-async function handleVote(itemId, newVoteType) {
-    if (!currentUserId || !auth.currentUser || !auth.currentUser.emailVerified) { alert("Log in & verify email to vote."); return; }
-    console.log(`handleVote: User ${currentUserId} voting '${newVoteType}' for item '${itemId}'`);
-    const itemRef = doc(db, 'items', itemId);
-    const userVotesRef = doc(db, 'userVotes', currentUserId);
-    const previousUserVote = userVotes[itemId];
-
-    const localItemBeforeVote = JSON.parse(JSON.stringify(itemsData[itemId] || {likes:0, dislikes:0, internalScore:5, element: null, h2Prefix: `${itemId}: `, originalOrder: -1 }));
-    const localUserVotesBeforeVote = JSON.parse(JSON.stringify(userVotes));
-
-    if (!itemsData[itemId]) { // Safety net, though should be initialized
-        itemsData[itemId] = { likes: 0, dislikes: 0, internalScore: 5, element: document.querySelector(`.box[data-item-id="${itemId}"]`), h2Prefix: `${itemId}: `, originalOrder: PREDEFINED_ITEMS_CONFIG.findIndex(i => i.id === itemId)};
-    }
-    itemsData[itemId].element = localItemBeforeVote.element; // Preserve element reference if item was re-created
-
-    userVotes[itemId] = (previousUserVote === newVoteType) ? null : newVoteType;
-    if (previousUserVote === newVoteType) {
-        if (newVoteType === 'like' && itemsData[itemId].likes > 0) itemsData[itemId].likes--;
-        else if (newVoteType === 'dislike' && itemsData[itemId].dislikes > 0) itemsData[itemId].dislikes--;
-    } else {
-        if (previousUserVote === 'like' && itemsData[itemId].likes > 0) itemsData[itemId].likes--;
-        else if (previousUserVote === 'dislike' && itemsData[itemId].dislikes > 0) itemsData[itemId].dislikes--;
-        if (newVoteType === 'like') itemsData[itemId].likes++;
-        else itemsData[itemId].dislikes++;
-    }
-    itemsData[itemId].internalScore = calculateInternalScore(itemsData[itemId].likes, itemsData[itemId].dislikes);
-    updateBoxDisplay(itemId);
-    renderSortedBoxes();
-
-    try {
-        await runTransaction(db, async (transaction) => {
-            const itemDocSnap = await transaction.get(itemRef);
-            if (!itemDocSnap.exists()) throw new Error(`Item document ${itemId} does not exist!`);
-            let cL = itemDocSnap.data().likes||0; let cD = itemDocSnap.data().dislikes||0;
-            let lI=0; let dI=0;
-            if(previousUserVote===newVoteType){if(newVoteType==='like')lI=-1;else dI=-1;}
-            else{if(previousUserVote==='like')lI=-1;else if(previousUserVote==='dislike')dI=-1; if(newVoteType==='like')lI+=1;else dI+=1;}
-            const nL=Math.max(0,cL+lI);const nD=Math.max(0,cD+dI);
-            transaction.update(itemRef,{likes:nL,dislikes:nD});
-            const uVU={};
-            if(userVotes[itemId]===null){uVU[itemId]=deleteField();}else{uVU[itemId]=userVotes[itemId];}
-            transaction.set(userVotesRef,uVU,{merge:true});
-        });
-        console.log(`Vote for ${itemId} (${newVoteType}) recorded in Firestore.`);
-    } catch (error) {
-        console.error("Vote transaction error for item " + itemId + ": ", error);
-        alert("Failed to record vote. Your change has been reverted. Please try again.");
-        itemsData[itemId] = localItemBeforeVote; userVotes = localUserVotesBeforeVote;
-        updateBoxDisplay(itemId); renderSortedBoxes();
-    }
-}
-
+// Ensure all helper functions for the liking system are copied here in full
+// For brevity, I've put /* ... same as before ... */ but you need the full function bodies.
+// Here they are for completeness:
+async function loadUserVotes() {if (!currentUserId) { console.log("loadUserVotes: No currentUserId."); userVotes = {}; return; } console.log("loadUserVotes: Loading for", currentUserId); const userVotesRef = doc(db, 'userVotes', currentUserId); try { const docSnap = await getDoc(userVotesRef); userVotes = (docSnap.exists() ? docSnap.data() : {}) || {}; console.log("loadUserVotes: Votes loaded:", userVotes); } catch (error) { console.error("Error loading user votes:", error); userVotes = {}; throw error; }}
+async function ensureItemDocExists(itemId, initialData) { console.log(`ensureItemDocExists: Checking for '${itemId}'`); const itemRef = doc(db, 'items', itemId); try { const docSnap = await getDoc(itemRef); if (!docSnap.exists()) { const dataToSet = { likes: initialData.initialLikes !== undefined ? initialData.initialLikes : 0, dislikes: initialData.initialDislikes !== undefined ? initialData.initialDislikes : 0, }; await setDoc(itemRef, dataToSet); console.log(`ensureItemDocExists: Created item doc for ${itemId} with data:`, dataToSet); return dataToSet; } console.log(`ensureItemDocExists: Found existing doc for '${itemId}':`, docSnap.data()); return docSnap.data(); } catch (error) { console.error(`ensureItemDocExists: Error for item '${itemId}':`, error); return null; }}
+async function handleVote(itemId, newVoteType) { if (!currentUserId || !auth.currentUser || !auth.currentUser.emailVerified) { alert("Log in & verify email to vote."); return; } console.log(`handleVote: User ${currentUserId} voting '${newVoteType}' for item '${itemId}'`); const itemRef = doc(db, 'items', itemId); const userVotesRef = doc(db, 'userVotes', currentUserId); const previousUserVote = userVotes[itemId]; const localItemBeforeVote = JSON.parse(JSON.stringify(itemsData[itemId] || {likes:0, dislikes:0, internalScore:5, element: null, h2Prefix: `${itemId}: `, originalOrder: -1 })); const localUserVotesBeforeVote = JSON.parse(JSON.stringify(userVotes)); if (!itemsData[itemId]) { itemsData[itemId] = { likes: 0, dislikes: 0, internalScore: 5, element: document.querySelector(`.box[data-item-id="${itemId}"]`), h2Prefix: `${itemId}: `, originalOrder: PREDEFINED_ITEMS_CONFIG.findIndex(i => i.id === itemId)}; } itemsData[itemId].element = localItemBeforeVote.element; userVotes[itemId] = (previousUserVote === newVoteType) ? null : newVoteType; if (previousUserVote === newVoteType) { if (newVoteType === 'like' && itemsData[itemId].likes > 0) itemsData[itemId].likes--; else if (newVoteType === 'dislike' && itemsData[itemId].dislikes > 0) itemsData[itemId].dislikes--; } else { if (previousUserVote === 'like' && itemsData[itemId].likes > 0) itemsData[itemId].likes--; else if (previousUserVote === 'dislike' && itemsData[itemId].dislikes > 0) itemsData[itemId].dislikes--; if (newVoteType === 'like') itemsData[itemId].likes++; else itemsData[itemId].dislikes++; } itemsData[itemId].internalScore = calculateInternalScore(itemsData[itemId].likes, itemsData[itemId].dislikes); updateBoxDisplay(itemId); renderSortedBoxes(); try { await runTransaction(db, async (transaction) => { const itemDocSnap = await transaction.get(itemRef); if (!itemDocSnap.exists()) throw new Error(`Item document ${itemId} does not exist!`); let cL = itemDocSnap.data().likes||0; let cD = itemDocSnap.data().dislikes||0; let lI=0; let dI=0; if(previousUserVote===newVoteType){if(newVoteType==='like')lI=-1;else dI=-1;} else{if(previousUserVote==='like')lI=-1;else if(previousUserVote==='dislike')dI=-1; if(newVoteType==='like')lI+=1;else dI+=1;} const nL=Math.max(0,cL+lI);const nD=Math.max(0,cD+dI); transaction.update(itemRef,{likes:nL,dislikes:nD}); const uVU={}; if(userVotes[itemId]===null){uVU[itemId]=deleteField();}else{uVU[itemId]=userVotes[itemId];} transaction.set(userVotesRef,uVU,{merge:true}); }); console.log(`Vote for ${itemId} (${newVoteType}) recorded in Firestore.`); } catch (error) { console.error("Vote transaction error for item " + itemId + ": ", error); alert("Failed to record vote. Your change has been reverted. Please try again."); itemsData[itemId] = localItemBeforeVote; userVotes = localUserVotesBeforeVote; updateBoxDisplay(itemId); renderSortedBoxes(); }}
 function getVoteValue(voteNumber) { if (voteNumber <= 0) return 0; if (voteNumber <= 10) return 0.1; if (voteNumber <= 20) return 0.05; if (voteNumber <= 30) return 0.025; if (voteNumber <= 50) return 0.01; return 0.005; }
 function calculateRawVoteScore(count) { let score = 0; for (let i = 1; i <= count; i++) { score += getVoteValue(i); } return score; }
 function calculateInternalScore(likes, dislikes) {const rawLikeScore = calculateRawVoteScore(likes); const rawDislikeScore = calculateRawVoteScore(dislikes); return 5 + rawLikeScore - rawDislikeScore;}
-
-function updateBoxDisplay(itemId) {
-    const item = itemsData[itemId];
-    if (!item || !item.element) { console.warn("updateBoxDisplay: no item/element for", itemId, "\ncurrent itemsData:", JSON.stringify(itemsData[itemId]), "\nall itemsData:", JSON.stringify(itemsData) ); return; }
-    const boxElement = item.element; const h2 = boxElement.querySelector('h2');
-    const likeBtn = boxElement.querySelector('.like-btn'); const dislikeBtn = boxElement.querySelector('.dislike-btn');
-    const likesCountSpan = boxElement.querySelector('.likes-count'); const dislikesCountSpan = boxElement.querySelector('.dislikes-count');
-
-    // Ensure internalScore is up-to-date before displaying
-    item.internalScore = calculateInternalScore(item.likes, item.dislikes);
-    const displayScore = Math.max(0, Math.min(10, item.internalScore));
-
-    if (h2) h2.textContent = `${item.h2Prefix}${displayScore.toFixed(1)}/10`;
-    if (likesCountSpan) likesCountSpan.textContent = `(${item.likes < 0 ? 0 : item.likes})`;
-    if (dislikesCountSpan) dislikesCountSpan.textContent = `(${item.dislikes < 0 ? 0 : item.dislikes})`;
-
-    if (likeBtn) likeBtn.classList.remove('active-like');
-    if (dislikeBtn) dislikeBtn.classList.remove('active-dislike');
-
-    const currentUserSpecificVote = userVotes[itemId];
-    if (currentUserSpecificVote === 'like' && likeBtn) { likeBtn.classList.add('active-like'); }
-    else if (currentUserSpecificVote === 'dislike' && dislikeBtn) { dislikeBtn.classList.add('active-dislike'); }
-}
-
-function renderSortedBoxes() {
-    const mainContainer = document.querySelector('.main'); if (!mainContainer) return;
-    const itemsArray = Object.values(itemsData).filter(item => item && item.element);
-    itemsArray.sort((a, b) => {
-        if (b.internalScore !== a.internalScore) { return b.internalScore - a.internalScore; }
-        return a.originalOrder - b.originalOrder;
-    });
-    // Detach all existing children before re-appending to ensure order
-    // While appending an existing child moves it, clearing first can be safer if elements change
-    // while (mainContainer.firstChild) {
-    // mainContainer.removeChild(mainContainer.firstChild);
-    // }
-    itemsArray.forEach(item => { mainContainer.appendChild(item.element); });
-}
-// --- END LIKING SYSTEM FUNCTIONS ---
+function updateBoxDisplay(itemId) { const item = itemsData[itemId]; if (!item || !item.element) { console.warn("updateBoxDisplay: no item/element for", itemId, "\ncurrent itemsData:", JSON.stringify(itemsData[itemId]), "\nall itemsData:", JSON.stringify(itemsData) ); return; } const boxElement = item.element; const h2 = boxElement.querySelector('h2'); const likeBtn = boxElement.querySelector('.like-btn'); const dislikeBtn = boxElement.querySelector('.dislike-btn'); const likesCountSpan = boxElement.querySelector('.likes-count'); const dislikesCountSpan = boxElement.querySelector('.dislikes-count'); item.internalScore = calculateInternalScore(item.likes, item.dislikes); const displayScore = Math.max(0, Math.min(10, item.internalScore)); if (h2) h2.textContent = `${item.h2Prefix}${displayScore.toFixed(1)}/10`; if (likesCountSpan) likesCountSpan.textContent = `(${item.likes < 0 ? 0 : item.likes})`; if (dislikesCountSpan) dislikesCountSpan.textContent = `(${item.dislikes < 0 ? 0 : item.dislikes})`; if (likeBtn) likeBtn.classList.remove('active-like'); if (dislikeBtn) dislikeBtn.classList.remove('active-dislike'); const currentUserSpecificVote = userVotes[itemId]; if (currentUserSpecificVote === 'like' && likeBtn) { likeBtn.classList.add('active-like'); } else if (currentUserSpecificVote === 'dislike' && dislikeBtn) { dislikeBtn.classList.add('active-dislike'); } }
+function renderSortedBoxes() { const mainContainer = document.querySelector('.main'); if (!mainContainer) return; const itemsArray = Object.values(itemsData).filter(item => item && item.element); itemsArray.sort((a, b) => { if (b.internalScore !== a.internalScore) { return b.internalScore - a.internalScore; } return a.originalOrder - b.originalOrder; }); itemsArray.forEach(item => { mainContainer.appendChild(item.element); }); }
