@@ -38,35 +38,45 @@ const firebaseConfig = {
 
 // --- Initialize Firebase (directly) ---
 try {
-    // Check if placeholders were ACTUALLY replaced during build.
-    // If apiKey still contains the placeholder, the build step failed or wasn't run.
+    // This check runs in the browser AFTER Netlify's build command should have run.
+    // If apiKey still contains the placeholder, or is empty, the build step failed or env var was missing.
     if (firebaseConfig.apiKey === "__FIREBASE_API_KEY__" || firebaseConfig.apiKey === "") {
-        // This check runs in the browser. If placeholders are still here,
-        // it means the build command didn't work or wasn't set up.
         throw new Error("Firebase config placeholders were not replaced during build, or API key is empty! Check Netlify build command and environment variables.");
     }
     app = initializeApp(firebaseConfig);
     auth = getAuth(app);
     db = getFirestore(app);
     console.log("%cFirebase initialized successfully (from build-time config).", "color: blue; font-weight: bold;");
-    console.log("Using projectId:", firebaseConfig.projectId); // Log a non-sensitive part to verify
+    console.log("Using projectId (from template):", firebaseConfig.projectId); // Log a non-sensitive part to verify
 } catch (e) {
     console.error("CRITICAL: Firebase initialization FAILED:", e);
-    // Attempt to display error to user if DOM is somewhat ready
-    const errorDisplay = () => {
-        const target = document.getElementById('auth-container') || document.body;
-        target.innerHTML = "<p style='color:red; font-size:18px; padding:20px;'>Error: Application failed to initialize. Firebase setup error. Check console and Netlify build logs.</p>" + (target === document.body ? "" : target.innerHTML);
+    const errorDisplayInit = () => {
+        // Try to find a specific error display area, or fallback to body
+        let errorTarget = document.getElementById('auth-error') || document.getElementById('auth-container');
+        if (!errorTarget) errorTarget = document.body;
+
+        const errorMsgElement = document.createElement('p');
+        errorMsgElement.style.color = 'red';
+        errorMsgElement.style.fontSize = '18px';
+        errorMsgElement.style.padding = '20px';
+        errorMsgElement.textContent = 'Error: Application failed to initialize. Firebase setup error. Check console and Netlify build logs.';
+        
+        if (errorTarget === document.body) {
+            errorTarget.insertBefore(errorMsgElement, errorTarget.firstChild);
+        } else {
+            errorTarget.appendChild(errorMsgElement);
+        }
     };
+    // Wait for DOM to be ready before trying to manipulate it for the error message
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', errorDisplay);
+        document.addEventListener('DOMContentLoaded', errorDisplayInit);
     } else {
-        errorDisplay();
+        errorDisplayInit();
     }
-    // We can't proceed if Firebase isn't initialized.
-    // The script will effectively stop useful execution here.
+    // The script will effectively stop useful execution here if Firebase init fails.
 }
 
-// --- DOM Elements (to be fetched inside initializeMainAppLogic or DOMContentLoaded) ---
+// --- DOM Elements (declared globally, assigned in initializeMainAppLogic) ---
 let authContainer, loginView, registerView, showRegisterLink, showLoginLink,
     loginEmailInput, loginPasswordInput, loginButton,
     registerEmailInput, registerPasswordInput, registerButton,
@@ -83,11 +93,10 @@ const PREDEFINED_ITEMS_CONFIG = [
 const ALLOWED_DOMAIN = "maroltingergasse.at";
 
 
-// Function to initialize everything AFTER DOM is ready AND Firebase is initialized
+// Function to initialize main app logic (DOM elements, event listeners, auth state)
 function initializeMainAppLogic() {
     console.log("%cinitializeMainAppLogic: Called.", "font-weight: bold;");
 
-    // Get DOM Elements now that DOM is ready
     authContainer = document.getElementById('auth-container');
     loginView = document.getElementById('login-view');
     registerView = document.getElementById('register-view');
@@ -105,33 +114,33 @@ function initializeMainAppLogic() {
     authErrorP = document.getElementById('auth-error');
     mainContentWrapper = document.getElementById('main-content-wrapper');
     authRequiredMessage = document.getElementById('auth-required-message');
-
-    // verificationMessageP is created and inserted in the DOMContentLoaded listener below
-    // We just need a reference if it was successfully created.
-    verificationMessageP = document.getElementById('verification-message');
-
+    verificationMessageP = document.getElementById('verification-message'); // Should exist from DOMContentLoaded
 
     if (!loginButton || !authContainer || !mainContentWrapper || !userInfoDisplay || !registerButton || !logoutButton || !verificationMessageP) {
-        console.error("CRITICAL: One or more essential DOM elements for app logic were not found after DOMContentLoaded!");
-        // Avoid aggressive body.innerHTML overwrite if some parts are there
+        console.error("CRITICAL: Essential DOM elements missing in initializeMainAppLogic!");
         if (authErrorP) authErrorP.textContent = "Error: Critical UI elements missing.";
-        else document.body.insertAdjacentHTML('afterbegin', "<p style='color:red;'>Critical UI elements missing.</p>");
+        else { // If authErrorP itself is missing, add error to body
+            const errorMsgDom = document.createElement('p');
+            errorMsgDom.style.color = 'red';
+            errorMsgDom.textContent = 'Critical UI elements missing.';
+            document.body.insertBefore(errorMsgDom, document.body.firstChild);
+        }
         return;
     }
 
-    // --- AUTHENTICATION LOGIC --- (This is from your last provided full script)
+    // --- AUTHENTICATION LOGIC ---
     onAuthStateChanged(auth, async (user) => {
         console.log("%cON AUTH STATE CHANGED (main logic):", "color: blue; font-weight: bold;", user);
         if(authErrorP) authErrorP.textContent = '';
 
         if (user) {
-            console.log("onAuthStateChanged: User object present. Reloading user state...");
-            try { await user.reload(); } catch (reloadError) { console.error("onAuthStateChanged: Error reloading user state:", reloadError); }
+            console.log("onAuthStateChanged: User present. Reloading...");
+            try { await user.reload(); } catch (e) { console.error("Auth reload err:", e); }
             const freshUser = auth.currentUser;
-            console.log("onAuthStateChanged: Fresh user object:", freshUser);
+            console.log("onAuthStateChanged: Fresh user:", freshUser);
 
             if (!freshUser) {
-                console.log("onAuthStateChanged: User became null after reload. UI set to signed out.");
+                console.log("onAuthStateChanged: User null after reload. UI to signed out.");
                 authContainer.style.display = 'block'; loginView.style.display = 'block';
                 registerView.style.display = 'none'; userInfoDisplay.style.display = 'none';
                 mainContentWrapper.style.display = 'none'; authRequiredMessage.style.display = 'block';
@@ -141,47 +150,40 @@ function initializeMainAppLogic() {
 
             if (freshUser.email && freshUser.email.toLowerCase().endsWith(`@${ALLOWED_DOMAIN}`)) {
                 if (freshUser.emailVerified) {
-                    console.log("%conAuthStateChanged: Access GRANTED for: " + freshUser.email, "color: green; font-weight: bold;");
+                    console.log("%cAccess GRANTED: " + freshUser.email, "color: green;");
                     authContainer.style.display = 'none'; userInfoDisplay.style.display = 'block';
                     userEmailSpan.textContent = freshUser.email; mainContentWrapper.style.display = 'block';
                     authRequiredMessage.style.display = 'none'; if(verificationMessageP) verificationMessageP.style.display = 'none';
                     initializeLikingSystem();
                 } else {
-                    console.log("onAuthStateChanged: Access PENDING VERIFICATION for:", freshUser.email);
+                    console.log("PENDING VERIFICATION: " + freshUser.email);
                     authContainer.style.display = 'none'; userInfoDisplay.style.display = 'block';
                     userEmailSpan.textContent = `${freshUser.email} (Unverified)`;
                     mainContentWrapper.style.display = 'none'; authRequiredMessage.style.display = 'none';
                     if(verificationMessageP) {
-                        verificationMessageP.innerHTML = `A verification email was sent to <strong>${freshUser.email}</strong>. Please verify. <button id="resend-verification-btn">Resend</button>`;
+                        verificationMessageP.innerHTML = `Verify <strong>${freshUser.email}</strong>. <button id="resend-verification-btn">Resend</button>`;
                         verificationMessageP.style.display = 'block';
                         const resendBtn = document.getElementById('resend-verification-btn');
-                        if (resendBtn) {
-                            resendBtn.onclick = () => {
-                                sendEmailVerification(freshUser)
-                                    .then(() => {
-                                        verificationMessageP.innerHTML = `Verification email resent to <strong>${freshUser.email}</strong>. (Btn in 20s)`;
-                                        setTimeout(() => {
-                                            if(verificationMessageP && verificationMessageP.style.display === 'block' && auth.currentUser && !auth.currentUser.emailVerified) {
-                                                verificationMessageP.innerHTML = `A verification email was sent to <strong>${freshUser.email}</strong>. Please verify. <button id="resend-verification-btn">Resend</button>`;
-                                            }
-                                        }, 20000);
-                                    })
-                                    .catch(error => { if(authErrorP) authErrorP.textContent = "Error resending: " + error.message; });
-                            };
+                        if(resendBtn) {
+                            resendBtn.onclick = () => sendEmailVerification(freshUser)
+                                .then(() => {
+                                    verificationMessageP.innerHTML = `Resent to <strong>${freshUser.email}</strong> (Btn in 20s)`;
+                                    setTimeout(() => { if(verificationMessageP && verificationMessageP.style.display === 'block' && auth.currentUser && !auth.currentUser.emailVerified) verificationMessageP.innerHTML = `Verify <strong>${freshUser.email}</strong>. <button id="resend-verification-btn">Resend</button>`; }, 20000);
+                                }).catch(e => { if(authErrorP) authErrorP.textContent="Resend err: "+e.message; });
                         }
                     }
                 }
             } else {
-                console.warn("onAuthStateChanged: Access DENIED (wrong domain):", freshUser.email);
-                if(authErrorP) authErrorP.textContent = `Access denied. Email must end with @${ALLOWED_DOMAIN}. Provided: ${freshUser.email || 'N/A'}`;
-                signOut(auth).catch(err => console.error("Error signing out after domain denial:", err));
+                console.warn("WRONG DOMAIN: " + freshUser.email);
+                if(authErrorP) authErrorP.textContent = `Denied. Use @${ALLOWED_DOMAIN}. You used: ${freshUser.email || 'N/A'}`;
+                signOut(auth).catch(e => console.error("Signout err:", e));
                 authContainer.style.display = 'block'; loginView.style.display = 'block';
                 registerView.style.display = 'none'; userInfoDisplay.style.display = 'none';
                 mainContentWrapper.style.display = 'none'; authRequiredMessage.style.display = 'none';
                 if(verificationMessageP) verificationMessageP.style.display = 'none';
             }
         } else {
-            console.log("onAuthStateChanged: User is SIGNED OUT. UI set to signed out.");
+            console.log("SIGNED OUT.");
             authContainer.style.display = 'block'; loginView.style.display = 'block';
             registerView.style.display = 'none'; userInfoDisplay.style.display = 'none';
             mainContentWrapper.style.display = 'none'; authRequiredMessage.style.display = 'block';
@@ -191,107 +193,61 @@ function initializeMainAppLogic() {
         }
     });
 
-    if (showRegisterLink) showRegisterLink.addEventListener('click', (e) => { e.preventDefault(); loginView.style.display = 'none'; registerView.style.display = 'block'; if(authErrorP) authErrorP.textContent = ''; if(verificationMessageP) verificationMessageP.style.display = 'none'; });
-    if (showLoginLink) showLoginLink.addEventListener('click', (e) => { e.preventDefault(); registerView.style.display = 'none'; loginView.style.display = 'block'; if(authErrorP) authErrorP.textContent = ''; if(verificationMessageP) verificationMessageP.style.display = 'none'; });
+    if(showRegisterLink) showRegisterLink.addEventListener('click', (e) => { e.preventDefault(); loginView.style.display = 'none'; registerView.style.display = 'block'; if(authErrorP) authErrorP.textContent = ''; if(verificationMessageP) verificationMessageP.style.display = 'none'; });
+    if(showLoginLink) showLoginLink.addEventListener('click', (e) => { e.preventDefault(); registerView.style.display = 'none'; loginView.style.display = 'block'; if(authErrorP) authErrorP.textContent = ''; if(verificationMessageP) verificationMessageP.style.display = 'none'; });
 
-    if (registerButton) {
-        registerButton.addEventListener('click', () => {
-            const email = registerEmailInput.value; const password = registerPasswordInput.value;
-            if(authErrorP) authErrorP.textContent = ''; if(verificationMessageP) verificationMessageP.style.display = 'none';
-            if (!email.toLowerCase().endsWith(`@${ALLOWED_DOMAIN}`)) { if(authErrorP) authErrorP.textContent = `Reg. only with @${ALLOWED_DOMAIN} emails.`; return; }
-            if (password.length < 6) { if(authErrorP) authErrorP.textContent = "Password min. 6 characters."; return; }
-
-            createUserWithEmailAndPassword(auth, email, password)
-                .then((userCredential) => {
-                    console.log("User registered:", userCredential.user.email);
-                    return sendEmailVerification(userCredential.user)
-                        .then(() => {
-                            console.log("Verification email sent to", userCredential.user.email);
-                            return signOut(auth);
-                        });
-                })
-                .then(() => {
-                    console.log("User signed out post-registration.");
-                    loginView.style.display = 'block'; registerView.style.display = 'none';
-                    if(authErrorP) authErrorP.textContent = '';
-                    if(verificationMessageP) {
-                        verificationMessageP.innerHTML = `Registration successful! Verify email for <strong>${email}</strong>, then log in.`;
-                        verificationMessageP.style.display = 'block';
-                    }
-                    registerEmailInput.value = ''; registerPasswordInput.value = '';
-                })
-                .catch((error) => {
-                    console.error("Registration/Email Error:", error.code, error.message);
-                    if(authErrorP) authErrorP.textContent = (error.code === 'auth/email-already-in-use') ? "Email already registered. Log in." : "Reg. failed: " + error.message;
-                });
-        });
-    }
-
-    if (loginButton) {
-        loginButton.addEventListener('click', () => {
-            console.log("%cLOGIN BUTTON CLICKED", "color: orange; font-weight: bold;");
-            const email = loginEmailInput.value; const password = loginPasswordInput.value;
-            if(authErrorP) authErrorP.textContent = ''; if (verificationMessageP) verificationMessageP.style.display = 'none';
-            signInWithEmailAndPassword(auth, email, password)
-                .then((userCredential) => { console.log("%csignIn SUCCESS:", "color: green;", userCredential.user.email); })
-                .catch((error) => {
-                    console.error("%csignIn FAILED:", "color: red;", error.code, error.message);
-                    if(authErrorP) authErrorP.textContent = (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') ? "Invalid email or password." : (error.code === 'auth/invalid-email') ? "Invalid email format." : "Login failed: " + error.message;
-                });
-        });
-    }
-
-    if (logoutButton) {
-        logoutButton.addEventListener('click', () => {
-            if(authErrorP) authErrorP.textContent = ''; if(verificationMessageP) verificationMessageP.style.display = 'none';
-            signOut(auth).then(() => {
-                console.log("User signed out successfully.");
-                itemListeners.forEach(unsubscribe => unsubscribe()); itemListeners = [];
-                itemsData = {}; userVotes = {}; currentUserId = null;
-                const mainContainer = document.querySelector('.main');
-                if(mainContainer) mainContainer.innerHTML = '';
-            }).catch((error) => { if(authErrorP) authErrorP.textContent = "Logout error: " + error.message; });
-        });
-    }
-    console.log("Main app event listeners and auth logic initialized.");
-} // End of initializeMainAppLogic
+    if(registerButton) registerButton.addEventListener('click', () => {
+        const email = registerEmailInput.value; const password = registerPasswordInput.value;
+        if(authErrorP) authErrorP.textContent = ''; if(verificationMessageP) verificationMessageP.style.display = 'none';
+        if (!email.toLowerCase().endsWith(`@${ALLOWED_DOMAIN}`)) { if(authErrorP) authErrorP.textContent = `Reg. only with @${ALLOWED_DOMAIN}`; return; }
+        if (password.length < 6) { if(authErrorP) authErrorP.textContent = "Password min. 6 chars."; return; }
+        createUserWithEmailAndPassword(auth, email, password)
+            .then(uc => sendEmailVerification(uc.user).then(() => signOut(auth)))
+            .then(() => {
+                loginView.style.display = 'block'; registerView.style.display = 'none'; if(authErrorP) authErrorP.textContent = '';
+                if(verificationMessageP) { verificationMessageP.innerHTML = `Registered! Verify <strong>${email}</strong>, then log in.`; verificationMessageP.style.display = 'block';}
+                registerEmailInput.value = ''; registerPasswordInput.value = '';
+            }).catch(e => { if(authErrorP) authErrorP.textContent = (e.code === 'auth/email-already-in-use') ? "Email registered. Log in." : "Reg. fail: " + e.message; });
+    });
+    if(loginButton) loginButton.addEventListener('click', () => {
+        console.log("%cLOGIN CLICKED", "color:orange;font-weight:bold;");
+        const e = loginEmailInput.value, p = loginPasswordInput.value; if(authErrorP)authErrorP.textContent=''; if(verificationMessageP)verificationMessageP.style.display='none';
+        signInWithEmailAndPassword(auth,e,p).then(uc=>console.log("%csignIn OK:","color:green;",uc.user.email))
+        .catch(err=>{console.error("%csignIn FAIL:","color:red;",err.code,err.message);if(authErrorP)authErrorP.textContent=(err.code==='auth/user-not-found'||err.code==='auth/wrong-password'||err.code==='auth/invalid-credential')?"Invalid email/pass.":"Login fail: "+err.message;});
+    });
+    if(logoutButton) logoutButton.addEventListener('click', () => {
+        if(authErrorP)authErrorP.textContent='';if(verificationMessageP)verificationMessageP.style.display='none';
+        signOut(auth).then(()=>{console.log("Signed out.");itemListeners.forEach(unsub=>unsub());itemListeners=[];itemsData={};userVotes={};currentUserId=null;const mc=document.querySelector('.main');if(mc)mc.innerHTML='';})
+        .catch(e=>{if(authErrorP)authErrorP.textContent="Logout err: "+e.message;});
+    });
+    console.log("Main app event listeners initialized.");
+}
 
 
-// This is the first part of the script that runs after imports and global Firebase init
-console.log("script.js: Parsed. Waiting for DOMContentLoaded.");
+// This is the first part of the script that runs after imports and Firebase init
+console.log("script.template.js: Parsed. Waiting for DOMContentLoaded.");
 
 document.addEventListener('DOMContentLoaded', () => {
-    console.log("script.js: DOMContentLoaded event fired.");
+    console.log("script.template.js: DOMContentLoaded event fired.");
 
-    // Create and insert verificationMessageP into the DOM here, once.
     if (!document.getElementById('verification-message')) {
         verificationMessageP = document.createElement('p');
         verificationMessageP.id = 'verification-message';
         verificationMessageP.className = 'info-message';
         verificationMessageP.style.display = 'none';
-
         const tempAuthContainer = document.getElementById('auth-container');
-        if (tempAuthContainer && tempAuthContainer.parentNode) {
-            tempAuthContainer.parentNode.insertBefore(verificationMessageP, tempAuthContainer);
-            console.log("verificationMessageP inserted before auth-container.");
-        } else if (document.body && document.body.firstChild) {
-            document.body.insertBefore(verificationMessageP, document.body.firstChild);
-        } else if (document.body) {
-            document.body.appendChild(verificationMessageP);
-        } else {
-            console.error("Could not find a place to insert verificationMessageP!");
-        }
+        if (tempAuthContainer && tempAuthContainer.parentNode) tempAuthContainer.parentNode.insertBefore(verificationMessageP, tempAuthContainer);
+        else if (document.body) document.body.appendChild(verificationMessageP); // Simpler fallback
+        else console.error("Cannot insert verificationMessageP!");
     } else {
         verificationMessageP = document.getElementById('verification-message');
     }
 
-    // Call initializeMainAppLogic now that DOM is ready and Firebase should be initialized
-    // (or an error displayed if Firebase init failed at the top level)
     if (app && auth && db) { // Check if Firebase was successfully initialized at the top
         initializeMainAppLogic();
     } else {
-        console.error("CRITICAL: Firebase not initialized globally. Main app logic cannot start.");
-        // Error message should already be on screen from the top-level try/catch
+        console.error("CRITICAL: Firebase not initialized globally (app, auth, or db is missing). Main app logic cannot start. Check top-level Firebase init.");
+        // The error message from the top-level try/catch around Firebase init should already be on screen.
     }
 });
 
@@ -301,75 +257,50 @@ async function initializeLikingSystem() {
     console.log("%c--- initializeLikingSystem CALLED ---", "color: purple; font-weight: bold;");
     if (auth.currentUser && auth.currentUser.emailVerified) {
         currentUserId = auth.currentUser.uid;
-        console.log("initializeLikingSystem: User is valid. UID:", currentUserId);
     } else {
-        console.error("initializeLikingSystem: Pre-condition not met. Aborting.");
         if(mainContentWrapper) mainContentWrapper.style.display = 'none';
-        if(authRequiredMessage) authRequiredMessage.style.display = auth.currentUser && !auth.currentUser.emailVerified ? 'none' : 'block';
+        if(authRequiredMessage) authRequiredMessage.style.display = 'block';
         return;
     }
-
     itemListeners.forEach(unsubscribe => unsubscribe()); itemListeners = [];
-    try { await loadUserVotes(); console.log("initializeLikingSystem: User votes loaded:", userVotes); }
-    catch (e) { console.error("initializeLikingSystem: Error during loadUserVotes:", e); userVotes = {}; }
-
+    try { await loadUserVotes(); } catch (e) { userVotes = {}; }
     const mainContainer = document.querySelector('.main');
-    if (!mainContainer) { console.error("initializeLikingSystem: CRITICAL - '.main' container NOT FOUND."); return; }
+    if (!mainContainer) { console.error("Liking Sys: '.main' container NOT FOUND."); return; }
     mainContainer.innerHTML = ''; itemsData = {};
-    console.log("initializeLikingSystem: Processing PREDEFINED_ITEMS_CONFIG. Count:", PREDEFINED_ITEMS_CONFIG.length);
-
     for (const pItemConfig of PREDEFINED_ITEMS_CONFIG) {
         const itemId = pItemConfig.id; const h2Prefix = `${itemId}: `;
         const firestoreItemData = await ensureItemDocExists(itemId, pItemConfig);
-        if (!firestoreItemData) { console.warn(`initializeLikingSystem: Skipping item '${itemId}'.`); continue; }
-
+        if (!firestoreItemData) continue;
         const boxElement = document.createElement('div'); boxElement.className = 'box'; boxElement.dataset.itemId = itemId;
         const h2 = document.createElement('h2');
         const voteControls = document.createElement('div'); voteControls.className = 'vote-controls';
-        voteControls.innerHTML = `<button class="like-btn" aria-label="Like">👍<span class="likes-count">(0)</span></button><button class="dislike-btn" aria-label="Dislike">👎<span class="dislikes-count">(0)</span></button>`;
+        voteControls.innerHTML = `<button class="like-btn">👍<span class="likes-count">(0)</span></button><button class="dislike-btn">👎<span class="dislikes-count">(0)</span></button>`;
         boxElement.appendChild(h2); boxElement.appendChild(voteControls); mainContainer.appendChild(boxElement);
-
         itemsData[itemId] = {
             likes: firestoreItemData.likes, dislikes: firestoreItemData.dislikes,
             internalScore: calculateInternalScore(firestoreItemData.likes, firestoreItemData.dislikes),
-            h2Prefix: h2Prefix, originalOrder: PREDEFINED_ITEMS_CONFIG.findIndex(item => item.id === itemId), element: boxElement
+            h2Prefix: h2Prefix, originalOrder: PREDEFINED_ITEMS_CONFIG.findIndex(i => i.id === itemId), element: boxElement
         };
         voteControls.querySelector('.like-btn').addEventListener('click', () => handleVote(itemId, 'like'));
         voteControls.querySelector('.dislike-btn').addEventListener('click', () => handleVote(itemId, 'dislike'));
         updateBoxDisplay(itemId);
-
         const itemRef = doc(db, 'items', itemId);
         const unsubscribe = onSnapshot(itemRef, (docSnap) => {
             if (docSnap.exists()) {
-                const updatedData = docSnap.data();
-                if (itemsData[itemId] && (itemsData[itemId].likes !== updatedData.likes || itemsData[itemId].dislikes !== updatedData.dislikes)) {
-                    itemsData[itemId].likes = updatedData.likes; itemsData[itemId].dislikes = updatedData.dislikes;
-                    updateBoxDisplay(itemId); renderSortedBoxes(); // internalScore updated in updateBoxDisplay
-                }
+                const d = docSnap.data(); if (itemsData[itemId] && (itemsData[itemId].likes!==d.likes || itemsData[itemId].dislikes!==d.dislikes)) {
+                itemsData[itemId].likes=d.likes; itemsData[itemId].dislikes=d.dislikes; updateBoxDisplay(itemId); renderSortedBoxes(); }
             }
-        }, error => { console.error(`Error listening to item ${itemId}:`, error); });
+        }, e => console.error(`Listen err ${itemId}:`,e));
         itemListeners.push(unsubscribe);
     }
-    renderSortedBoxes(); console.log("initializeLikingSystem: Initialization complete.");
+    renderSortedBoxes();
 }
-
-async function loadUserVotes() { /* ... same as before ... */ }
-async function ensureItemDocExists(itemId, initialData) { /* ... same as before ... */ }
-async function handleVote(itemId, newVoteType) { /* ... same as before ... */ }
-function getVoteValue(voteNumber) { /* ... same as before ... */ }
-function calculateRawVoteScore(count) { /* ... same as before ... */ }
-function calculateInternalScore(likes, dislikes) { /* ... same as before ... */ }
-function updateBoxDisplay(itemId) { /* ... same as before ... */ }
-function renderSortedBoxes() { /* ... same as before ... */ }
-
-// Ensure all helper functions for the liking system are copied here in full
-// For brevity, I've put /* ... same as before ... */ but you need the full function bodies.
-// Here they are for completeness:
-async function loadUserVotes() {if (!currentUserId) { console.log("loadUserVotes: No currentUserId."); userVotes = {}; return; } console.log("loadUserVotes: Loading for", currentUserId); const userVotesRef = doc(db, 'userVotes', currentUserId); try { const docSnap = await getDoc(userVotesRef); userVotes = (docSnap.exists() ? docSnap.data() : {}) || {}; console.log("loadUserVotes: Votes loaded:", userVotes); } catch (error) { console.error("Error loading user votes:", error); userVotes = {}; throw error; }}
-async function ensureItemDocExists(itemId, initialData) { console.log(`ensureItemDocExists: Checking for '${itemId}'`); const itemRef = doc(db, 'items', itemId); try { const docSnap = await getDoc(itemRef); if (!docSnap.exists()) { const dataToSet = { likes: initialData.initialLikes !== undefined ? initialData.initialLikes : 0, dislikes: initialData.initialDislikes !== undefined ? initialData.initialDislikes : 0, }; await setDoc(itemRef, dataToSet); console.log(`ensureItemDocExists: Created item doc for ${itemId} with data:`, dataToSet); return dataToSet; } console.log(`ensureItemDocExists: Found existing doc for '${itemId}':`, docSnap.data()); return docSnap.data(); } catch (error) { console.error(`ensureItemDocExists: Error for item '${itemId}':`, error); return null; }}
-async function handleVote(itemId, newVoteType) { if (!currentUserId || !auth.currentUser || !auth.currentUser.emailVerified) { alert("Log in & verify email to vote."); return; } console.log(`handleVote: User ${currentUserId} voting '${newVoteType}' for item '${itemId}'`); const itemRef = doc(db, 'items', itemId); const userVotesRef = doc(db, 'userVotes', currentUserId); const previousUserVote = userVotes[itemId]; const localItemBeforeVote = JSON.parse(JSON.stringify(itemsData[itemId] || {likes:0, dislikes:0, internalScore:5, element: null, h2Prefix: `${itemId}: `, originalOrder: -1 })); const localUserVotesBeforeVote = JSON.parse(JSON.stringify(userVotes)); if (!itemsData[itemId]) { itemsData[itemId] = { likes: 0, dislikes: 0, internalScore: 5, element: document.querySelector(`.box[data-item-id="${itemId}"]`), h2Prefix: `${itemId}: `, originalOrder: PREDEFINED_ITEMS_CONFIG.findIndex(i => i.id === itemId)}; } itemsData[itemId].element = localItemBeforeVote.element; userVotes[itemId] = (previousUserVote === newVoteType) ? null : newVoteType; if (previousUserVote === newVoteType) { if (newVoteType === 'like' && itemsData[itemId].likes > 0) itemsData[itemId].likes--; else if (newVoteType === 'dislike' && itemsData[itemId].dislikes > 0) itemsData[itemId].dislikes--; } else { if (previousUserVote === 'like' && itemsData[itemId].likes > 0) itemsData[itemId].likes--; else if (previousUserVote === 'dislike' && itemsData[itemId].dislikes > 0) itemsData[itemId].dislikes--; if (newVoteType === 'like') itemsData[itemId].likes++; else itemsData[itemId].dislikes++; } itemsData[itemId].internalScore = calculateInternalScore(itemsData[itemId].likes, itemsData[itemId].dislikes); updateBoxDisplay(itemId); renderSortedBoxes(); try { await runTransaction(db, async (transaction) => { const itemDocSnap = await transaction.get(itemRef); if (!itemDocSnap.exists()) throw new Error(`Item document ${itemId} does not exist!`); let cL = itemDocSnap.data().likes||0; let cD = itemDocSnap.data().dislikes||0; let lI=0; let dI=0; if(previousUserVote===newVoteType){if(newVoteType==='like')lI=-1;else dI=-1;} else{if(previousUserVote==='like')lI=-1;else if(previousUserVote==='dislike')dI=-1; if(newVoteType==='like')lI+=1;else dI+=1;} const nL=Math.max(0,cL+lI);const nD=Math.max(0,cD+dI); transaction.update(itemRef,{likes:nL,dislikes:nD}); const uVU={}; if(userVotes[itemId]===null){uVU[itemId]=deleteField();}else{uVU[itemId]=userVotes[itemId];} transaction.set(userVotesRef,uVU,{merge:true}); }); console.log(`Vote for ${itemId} (${newVoteType}) recorded in Firestore.`); } catch (error) { console.error("Vote transaction error for item " + itemId + ": ", error); alert("Failed to record vote. Your change has been reverted. Please try again."); itemsData[itemId] = localItemBeforeVote; userVotes = localUserVotesBeforeVote; updateBoxDisplay(itemId); renderSortedBoxes(); }}
-function getVoteValue(voteNumber) { if (voteNumber <= 0) return 0; if (voteNumber <= 10) return 0.1; if (voteNumber <= 20) return 0.05; if (voteNumber <= 30) return 0.025; if (voteNumber <= 50) return 0.01; return 0.005; }
-function calculateRawVoteScore(count) { let score = 0; for (let i = 1; i <= count; i++) { score += getVoteValue(i); } return score; }
-function calculateInternalScore(likes, dislikes) {const rawLikeScore = calculateRawVoteScore(likes); const rawDislikeScore = calculateRawVoteScore(dislikes); return 5 + rawLikeScore - rawDislikeScore;}
-function updateBoxDisplay(itemId) { const item = itemsData[itemId]; if (!item || !item.element) { console.warn("updateBoxDisplay: no item/element for", itemId, "\ncurrent itemsData:", JSON.stringify(itemsData[itemId]), "\nall itemsData:", JSON.stringify(itemsData) ); return; } const boxElement = item.element; const h2 = boxElement.querySelector('h2'); const likeBtn = boxElement.querySelector('.like-btn'); const dislikeBtn = boxElement.querySelector('.dislike-btn'); const likesCountSpan = boxElement.querySelector('.likes-count'); const dislikesCountSpan = boxElement.querySelector('.dislikes-count'); item.internalScore = calculateInternalScore(item.likes, item.dislikes); const displayScore = Math.max(0, Math.min(10, item.internalScore)); if (h2) h2.textContent = `${item.h2Prefix}${displayScore.toFixed(1)}/10`; if (likesCountSpan) likesCountSpan.textContent = `(${item.likes < 0 ? 0 : item.likes})`; if (dislikesCountSpan) dislikesCountSpan.textContent = `(${item.dislikes < 0 ? 0 : item.dislikes})`; if (likeBtn) likeBtn.classList.remove('active-like'); if (dislikeBtn) dislikeBtn.classList.remove('active-dislike'); const currentUserSpecificVote = userVotes[itemId]; if (currentUserSpecificVote === 'like' && likeBtn) { likeBtn.classList.add('active-like'); } else if (currentUserSpecificVote === 'dislike' && dislikeBtn) { dislikeBtn.classList.add('active-dislike'); } }
-function renderSortedBoxes() { const mainContainer = document.querySelector('.main'); if (!mainContainer) return; const itemsArray = Object.values(itemsData).filter(item => item && item.element); itemsArray.sort((a, b) => { if (b.internalScore !== a.internalScore) { return b.internalScore - a.internalScore; } return a.originalOrder - b.originalOrder; }); itemsArray.forEach(item => { mainContainer.appendChild(item.element); }); }
+async function loadUserVotes() {if (!currentUserId) {userVotes={}; return;} const ref=doc(db,'userVotes',currentUserId); try {const d=await getDoc(ref); userVotes=(d.exists()?d.data():{})||{};} catch(e){console.error("LoadUserVotes err:",e);userVotes={};throw e;}}
+async function ensureItemDocExists(itemId, initialData) {const ref=doc(db,'items',itemId); try {const d=await getDoc(ref); if(!d.exists()){const ds={likes:initialData.initialLikes||0,dislikes:initialData.initialDislikes||0}; await setDoc(ref,ds); return ds;} return d.data();} catch(e){console.error(`EnsureItem err ${itemId}:`,e);return null;}}
+async function handleVote(itemId, voteType) { if(!currentUserId || !auth.currentUser || !auth.currentUser.emailVerified){alert("Login & verify.");return;} const iR=doc(db,'items',itemId); const uVR=doc(db,'userVotes',currentUserId); const pUV=userVotes[itemId]; const lIB=JSON.parse(JSON.stringify(itemsData[itemId]||{l:0,d:0,iS:5,eN:null,hP:`${itemId}: `,oO:-1})); const lUVB=JSON.parse(JSON.stringify(userVotes)); if(!itemsData[itemId]){itemsData[itemId]={l:0,d:0,iS:5,eN:document.querySelector(`.box[data-item-id="${itemId}"]`),hP:`${itemId}: `,oO:PREDEFINED_ITEMS_CONFIG.findIndex(i=>i.id===itemId)};} itemsData[itemId].element=lIB.element; userVotes[itemId]=(pUV===voteType)?null:voteType; if(pUV===voteType){if(voteType==='like'&&itemsData[itemId].likes>0)itemsData[itemId].likes--;else if(voteType==='dislike'&&itemsData[itemId].dislikes>0)itemsData[itemId].dislikes--;}else{if(pUV==='like'&&itemsData[itemId].likes>0)itemsData[itemId].likes--;else if(pUV==='dislike'&&itemsData[itemId].dislikes>0)itemsData[itemId].dislikes--; if(voteType==='like')itemsData[itemId].likes++;else itemsData[itemId].dislikes++;} itemsData[itemId].internalScore=calculateInternalScore(itemsData[itemId].likes,itemsData[itemId].dislikes); updateBoxDisplay(itemId);renderSortedBoxes(); try{await runTransaction(db,async t=>{const iDS=await t.get(iR);if(!iDS.exists())throw new Error(`Item ${itemId} missing!`);let cL=iDS.data().likes||0;let cD=iDS.data().dislikes||0;let lI=0,dI=0;if(pUV===voteType){if(voteType==='like')lI=-1;else dI=-1;}else{if(pUV==='like')lI=-1;else if(pUV==='dislike')dI=-1;if(voteType==='like')lI+=1;else dI+=1;}const nL=Math.max(0,cL+lI);const nD=Math.max(0,cD+dI);t.update(iR,{likes:nL,dislikes:nD});const uVU={};if(userVotes[itemId]===null)uVU[itemId]=deleteField();else uVU[itemId]=userVotes[itemId];t.set(uVR,uVU,{merge:true});});}catch(e){console.error(`Vote err ${itemId}:`,e);alert("Vote fail.Reverted.");itemsData[itemId]=lIB;userVotes=lUVB;updateBoxDisplay(itemId);renderSortedBoxes();}}
+function getVoteValue(vN){if(vN<=0)return 0;if(vN<=10)return 0.1;if(vN<=20)return 0.05;if(vN<=30)return 0.025;if(vN<=50)return 0.01;return 0.005;}
+function calculateRawVoteScore(c){let s=0;for(let i=1;i<=c;i++)s+=getVoteValue(i);return s;}
+function calculateInternalScore(l,d){return 5+calculateRawVoteScore(l)-calculateRawVoteScore(d);}
+function updateBoxDisplay(itemId){const i=itemsData[itemId];if(!i||!i.element){console.warn("updateBox: no item/element",itemId);return;}const bE=i.element;const h2=bE.querySelector('h2');const lB=bE.querySelector('.like-btn');const dB=bE.querySelector('.dislike-btn');const lCS=bE.querySelector('.likes-count');const dCS=bE.querySelector('.dislikes-count');i.internalScore=calculateInternalScore(i.likes,i.dislikes);const dS=Math.max(0,Math.min(10,i.internalScore));if(h2)h2.textContent=`${i.h2Prefix}${dS.toFixed(1)}/10`;if(lCS)lCS.textContent=`(${i.likes<0?0:i.likes})`;if(dCS)dCS.textContent=`(${i.dislikes<0?0:i.dislikes})`;if(lB)lB.classList.remove('active-like');if(dB)dB.classList.remove('active-dislike');const cUSV=userVotes[itemId];if(cUSV==='like'&&lB)lB.classList.add('active-like');else if(cUSV==='dislike'&&dB)dB.classList.add('active-dislike');}
+function renderSortedBoxes(){const mC=document.querySelector('.main');if(!mC)return;const iA=Object.values(itemsData).filter(i=>i&&i.element);iA.sort((a,b)=>{if(b.internalScore!==a.internalScore)return b.internalScore-a.internalScore;return a.originalOrder-b.originalOrder;});iA.forEach(i=>mC.appendChild(i.element));}
+// --- END LIKING SYSTEM FUNCTIONS ---
