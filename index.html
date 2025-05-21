@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Axo - Maroltinger Gasse</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <!--
+        REMOVE THE OLD FIREBASE COMPAT SCRIPT TAGS:
+        <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+        <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+        <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    -->
+</head>
+<body>
+    <div class="app-container">
+        <h1>Axo Ratings</h1>
+
+        <div id="auth-container">
+            <div id="login-view">
+                <h2>Login</h2>
+                <input type="email" id="login-email" placeholder="School Email (...@maroltingergasse.at)" required>
+                <input type="password" id="login-password" placeholder="Password" required>
+                <button id="login-button">Login</button>
+                <p>No account? <a href="#" id="show-register-view">Register here</a></p>
+            </div>
+
+            <div id="register-view" style="display: none;">
+                <h2>Register</h2>
+                <input type="email" id="register-email" placeholder="School Email (...@maroltingergasse.at)" required>
+                <input type="password" id="register-password" placeholder="Password (min. 6 characters)" required>
+                <button id="register-button">Register</button>
+                <p>Already have an account? <a href="#" id="show-login-view">Login here</a></p>
+            </div>
+            <p id="auth-error" class="error-message"></p>
+        </div>
+
+        <div id="user-info" style="display: none;">
+            <p>Logged in as: <span id="user-email-display"></span></p>
+            <button id="logout-button">Logout</button>
+        </div>
+
+        <div id="main-content-wrapper" style="display: none;">
+            <p class="info-message">Welcome! You can now rate items.</p>
+            <div class="main">
+                <!-- Boxes dynamically added by JS -->
+            </div>
+        </div>
+        <p id="auth-required-message" class="info-message" style="display: block;">
+            Please log in with your @maroltingergasse.at email to view and rate items.
+        </p>
+        <!-- This p tag will be dynamically created by JS for verification messages
+        <p id="verification-message" class="info-message" style="display: none;"></p>
+        -->
+    </div>
+
+    <!-- ADD type="module" to your script tag -->
+    <script type="module" src="../js/script.js"></script>
+</body>
+</html>

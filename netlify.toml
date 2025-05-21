@@ -1,0 +1,9 @@
+# netlify.toml (in your repository root)
+
+[build]
+  publish = "." # Publish the entire repository root
+
+[[redirects]]
+  from = "/"
+  to = "/html/index.html"
+  status = 200 # Serve the content of /html/index.html directly, not a 301/302 redirect

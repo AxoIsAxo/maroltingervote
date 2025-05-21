@@ -1,0 +1,124 @@
+body {
+    text-align: center;
+    background-color: rgb(224, 178, 87);
+    font-family: Verdana, Geneva, Tahoma, sans-serif;
+    color: rgb(255, 234, 192);
+    padding: 20px;
+}
+
+.app-container {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+h1 {
+    color: #fff;
+    margin-bottom: 30px;
+}
+
+/* Authentication Styles */
+#auth-container, #user-info {
+    background: rgba(255, 255, 255, 0.15);
+    padding: 20px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+#auth-container h2 {
+    margin-top: 0;
+    color: #fff;
+}
+
+#auth-container input[type="email"],
+#auth-container input[type="password"] {
+    width: calc(100% - 22px);
+    padding: 10px;
+    margin-bottom: 10px;
+    border-radius: 5px;
+    border: 1px solid #ccc;
+    background-color: rgba(255, 255, 255, 0.8);
+    color: #333;
+}
+
+#auth-container button, #user-info button {
+    padding: 10px 15px;
+    border-radius: 5px;
+    border: none;
+    background-color: rgb(255, 234, 192);
+    color: rgb(150, 100, 0);
+    cursor: pointer;
+    font-weight: bold;
+    margin-top: 5px;
+    transition: background-color 0.2s;
+}
+#auth-container button:hover, #user-info button:hover {
+    background-color: rgb(250, 220, 170);
+}
+
+#auth-container p {
+    margin-top: 15px;
+    font-size: 0.9em;
+}
+#auth-container a {
+    color: rgb(255, 250, 220);
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.error-message {
+    color: #ff6b6b; /* Light red for errors */
+    margin-top: 10px;
+    font-weight: bold;
+}
+.info-message { /* For verification message and auth required message */
+    color: #f0f0f0;
+    margin-top: 15px;
+    padding: 10px;
+    background-color: rgba(0,0,0,0.1);
+    border-radius: 5px;
+}
+#verification-message button { /* Style for resend button */
+    margin-left: 10px;
+    padding: 5px 8px;
+    font-size: 0.9em;
+}
+
+
+/* Main content wrapper */
+#main-content-wrapper {
+    /* Styles for when content is visible */
+}
+
+.main {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 16px;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    padding: 10px;
+}
+
+.box {
+    border-radius: 6px;
+    background: rgb(224, 178, 87);
+    width: fit-content;
+    padding: 15px;
+    margin: 10px auto;
+    text-align: left;
+    position: relative;
+}
+
+.box h2 { margin-top: 0; margin-bottom: 10px; }
+.vote-controls { margin-top: 8px; }
+.vote-controls button {
+    padding: 6px 10px; margin: 0 4px; cursor: pointer;
+    border: 1px solid rgb(255, 234, 192, 0.7); background-color: transparent;
+    color: rgb(255, 234, 192); border-radius: 4px; font-size: 1em;
+    transition: background-color 0.2s, border-color 0.2s;
+}
+.vote-controls button:hover { background-color: rgba(255, 234, 192, 0.2); }
+.vote-controls button.active-like { background-color: rgba(144, 238, 144, 0.5); border-color: rgba(92, 184, 92, 0.8); color: #fff; }
+.vote-controls button.active-dislike { background-color: rgba(255, 204, 203, 0.5); border-color: rgba(217, 83, 79, 0.8); color: #fff; }
+.likes-count, .dislikes-count { font-size: 0.8em; margin-left: 4px; color: rgba(255, 234, 192, 0.8); }
