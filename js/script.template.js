@@ -33,7 +33,7 @@ const firebaseConfig = {
   storageBucket: "__FIREBASE_STORAGE_BUCKET__",
   messagingSenderId: "__FIREBASE_MESSAGING_SENDER_ID__",
   appId: "__FIREBASE_APP_ID__",
-  measurementId: "__FIREBASE_MEASUREMENT_ID__" // Will be empty if FIREBASE_MEASUREMENT_ID is not set in Netlify
+  measurementId: "__FIREBASE_MEASUREMENT_ID__"
 };
 
 // --- Initialize Firebase (directly) ---
