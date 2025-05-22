@@ -69,6 +69,11 @@ const PREDEFINED_ITEMS_CONFIG = [
     { id: "POT", initialLikes: 0, initialDislikes: 0 },
     { id: "MAI", initialLikes: 0, initialDislikes: 0 },
     { id: "BAU", initialLikes: 0, initialDislikes: 0 },
+    { id: "ENG", initialLikes: 0, initialDislikes: 0 },
+    { id: "SCM", initialLikes: 0, initialDislikes: 0 },
+    { id: "MRT", initialLikes: 0, initialDislikes: 0 },
+    { id: "PIT", initialLikes: 0, initialDislikes: 0 },
+    { id: "EGT", initialLikes: 0, initialDislikes: 0 },
 ];
 const ALLOWED_DOMAIN = "maroltingergasse.at";
 
