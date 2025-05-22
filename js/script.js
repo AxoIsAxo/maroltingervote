@@ -1,4 +1,4 @@
-// js/script.template.js
+// js/script.js
 
 // --- Import necessary Firebase modules ---
 import { initializeApp } from "firebase/app";
@@ -25,7 +25,7 @@ let app;
 let auth;
 let db;
 
-// --- Firebase configuration placeholders (to be replaced by Netlify build command) ---
+// --- Your web app's Firebase configuration (HARCODED WITH YOUR ACTUAL VALUES) ---
 const firebaseConfig = {
   apiKey: "AIzaSyDoo957xiZB2heugMso-C6oS1jSjciLUq0",
   authDomain: "maroltingervote.firebaseapp.com",
@@ -38,27 +38,22 @@ const firebaseConfig = {
 
 // --- Initialize Firebase (directly) ---
 try {
-    if (firebaseConfig.apiKey === "__FIREBASE_API_KEY__" || firebaseConfig.apiKey === "") {
-        throw new Error("Firebase config placeholders were not replaced during build, or API key is empty! Check Netlify build command and environment variables.");
-    }
     app = initializeApp(firebaseConfig);
     auth = getAuth(app);
     db = getFirestore(app);
-    console.log("%cFirebase initialized successfully (from build-time config).", "color: blue; font-weight: bold;");
-    console.log("Using projectId (from template):", firebaseConfig.projectId);
+    console.log("%cFirebase initialized successfully (HARCODED CONFIG).", "color: orange; font-weight: bold;");
 } catch (e) {
-    console.error("CRITICAL: Firebase initialization FAILED:", e);
+    console.error("CRITICAL: Firebase initialization FAILED (HARCODED CONFIG):", e);
     const errorDisplayInit = () => {
-        let errorTarget = document.getElementById('auth-error') || document.getElementById('auth-container') || document.body;
-        if (!errorTarget) errorTarget = document.body; // Ultimate fallback
+        let errorTarget = document.getElementById('auth-container') || document.body;
         const errorMsgElement = document.createElement('p');
-        errorMsgElement.style.color = 'red'; errorMsgElement.style.fontSize = '18px'; errorMsgElement.style.padding = '20px';
-        errorMsgElement.textContent = 'Error: Application failed to initialize. Firebase setup error. Check console and Netlify build logs.';
+        errorMsgElement.style.color = 'red';errorMsgElement.style.fontSize = '18px';errorMsgElement.style.padding = '20px';
+        errorMsgElement.textContent = 'Error: Application failed to initialize. Firebase setup error. Check console.';
         if (errorTarget === document.body && errorTarget.firstChild) { errorTarget.insertBefore(errorMsgElement, errorTarget.firstChild); }
         else if (errorTarget) { errorTarget.appendChild(errorMsgElement); }
     };
-    if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', errorDisplayInit); }
-    else { errorDisplayInit(); }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', errorDisplayInit);
+    else errorDisplayInit();
 }
 
 // --- DOM Elements (declared globally, assigned in initializeMainAppLogic) ---
@@ -76,6 +71,7 @@ const PREDEFINED_ITEMS_CONFIG = [
     { id: "BAU", initialLikes: 0, initialDislikes: 0 },
 ];
 const ALLOWED_DOMAIN = "maroltingergasse.at";
+
 
 function initializeMainAppLogic() {
     console.log("%cinitializeMainAppLogic: Called.", "font-weight: bold;");
@@ -100,8 +96,8 @@ function initializeMainAppLogic() {
 
     if (!loginButton || !authContainer || !mainContentWrapper || !userInfoDisplay || !registerButton || !logoutButton || !verificationMessageP) {
         console.error("CRITICAL: Essential DOM elements missing in initializeMainAppLogic!");
-        if (authErrorP) authErrorP.textContent = "Error: Critical UI elements missing.";
-        else { const eM = document.createElement('p'); eM.style.color='red';eM.textContent='Critical UI elements missing.'; document.body.insertBefore(eM,document.body.firstChild); }
+        if(authErrorP) authErrorP.textContent = "Error: Critical UI elements missing.";
+        else { const eM = document.createElement('p');eM.style.color='red';eM.textContent='Critical UI elements missing.'; document.body.insertBefore(eM,document.body.firstChild); }
         return;
     }
 
@@ -133,14 +129,21 @@ function initializeMainAppLogic() {
                         verificationMessageP.innerHTML = `Verify <strong>${freshUser.email}</strong>. <button id="resend-verification-btn">Resend</button>`;
                         verificationMessageP.style.display = 'block';
                         const resendBtn = document.getElementById('resend-verification-btn');
-                        if(resendBtn) resendBtn.onclick = () => sendEmailVerification(freshUser).then(() => { verificationMessageP.innerHTML = `Resent to <strong>${freshUser.email}</strong> (Btn in 20s)`; setTimeout(() => { if(verificationMessageP && verificationMessageP.style.display === 'block' && auth.currentUser && !auth.currentUser.emailVerified) verificationMessageP.innerHTML = `Verify <strong>${freshUser.email}</strong>. <button id="resend-verification-btn">Resend</button>`; }, 20000); }).catch(e => { if(authErrorP) authErrorP.textContent="Resend err: "+e.message; });
+                        if(resendBtn) resendBtn.onclick = () => sendEmailVerification(freshUser)
+                            .then(() => {
+                                verificationMessageP.innerHTML = `Resent to <strong>${freshUser.email}</strong> (Btn in 20s)`;
+                                setTimeout(() => { if(verificationMessageP && verificationMessageP.style.display === 'block' && auth.currentUser && !auth.currentUser.emailVerified) verificationMessageP.innerHTML = `Verify <strong>${freshUser.email}</strong>. <button id="resend-verification-btn">Resend</button>`; }, 20000);
+                            }).catch(e => { if(authErrorP) authErrorP.textContent="Resend err: "+e.message; });
                     }
                 }
             } else {
                 console.warn("WRONG DOMAIN: " + freshUser.email);
                 if(authErrorP) authErrorP.textContent = `Denied. Use @${ALLOWED_DOMAIN}. You used: ${freshUser.email || 'N/A'}`;
                 signOut(auth).catch(e => console.error("Signout err:", e));
-                authContainer.style.display = 'block'; loginView.style.display = 'block'; registerView.style.display = 'none'; userInfoDisplay.style.display = 'none'; mainContentWrapper.style.display = 'none'; authRequiredMessage.style.display = 'none'; if(verificationMessageP) verificationMessageP.style.display = 'none';
+                authContainer.style.display = 'block'; loginView.style.display = 'block';
+                registerView.style.display = 'none'; userInfoDisplay.style.display = 'none';
+                mainContentWrapper.style.display = 'none'; authRequiredMessage.style.display = 'none';
+                if(verificationMessageP) verificationMessageP.style.display = 'none';
             }
         } else {
             console.log("SIGNED OUT.");
@@ -161,9 +164,9 @@ function initializeMainAppLogic() {
     console.log("Main app event listeners initialized.");
 }
 
-console.log("script.template.js: Parsed. Waiting for DOMContentLoaded.");
+console.log("script.js: Parsed. Waiting for DOMContentLoaded.");
 document.addEventListener('DOMContentLoaded', () => {
-    console.log("script.template.js: DOMContentLoaded event fired.");
+    console.log("script.js: DOMContentLoaded event fired.");
     if (!document.getElementById('verification-message')) {
         verificationMessageP = document.createElement('p');
         verificationMessageP.id = 'verification-message';
@@ -180,7 +183,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (app && auth && db) {
         initializeMainAppLogic();
     } else {
-        console.error("CRITICAL: Firebase not initialized globally. Main app logic cannot start. Check top-level Firebase init. This error usually means the try/catch block at the top of the script (around Firebase init) failed due to config issues.");
+        console.error("CRITICAL: Firebase not initialized globally (app, auth, or db is missing). Main app logic cannot start. Check top-level Firebase init.");
     }
 });
 
@@ -198,6 +201,7 @@ async function initializeLikingSystem() {
     const mainContainer = document.querySelector('.main');
     if (!mainContainer) { console.error("Liking Sys: '.main' container NOT FOUND."); return; }
     mainContainer.innerHTML = ''; itemsData = {};
+
     for (const pItemConfig of PREDEFINED_ITEMS_CONFIG) {
         const itemId = pItemConfig.id; const h2Prefix = `${itemId}: `;
         const firestoreItemData = await ensureItemDocExists(itemId, pItemConfig);
@@ -207,15 +211,31 @@ async function initializeLikingSystem() {
         const voteControls = document.createElement('div'); voteControls.className = 'vote-controls';
         voteControls.innerHTML = `<button class="like-btn" aria-label="Like">👍<span class="likes-count">(0)</span></button><button class="dislike-btn" aria-label="Dislike">👎<span class="dislikes-count">(0)</span></button>`;
         boxElement.appendChild(h2); boxElement.appendChild(voteControls); mainContainer.appendChild(boxElement);
+
         itemsData[itemId] = {
             likes: firestoreItemData.likes, dislikes: firestoreItemData.dislikes,
             internalScore: calculateInternalScore(firestoreItemData.likes, firestoreItemData.dislikes),
-            h2Prefix: h2Prefix, originalOrder: PREDEFINED_ITEMS_CONFIG.findIndex(i => i.id === itemId), element: boxElement
+            h2Prefix: h2Prefix, originalOrder: PREDEFINED_ITEMS_CONFIG.findIndex(i => i.id === itemId),
+            element: boxElement // Store the DOM element reference
         };
+
         const likeBtn = voteControls.querySelector('.like-btn');
         const dislikeBtn = voteControls.querySelector('.dislike-btn');
-        if(likeBtn) likeBtn.addEventListener('click', () => handleVote(itemId, 'like')); else console.error(`No like button for ${itemId}`);
-        if(dislikeBtn) dislikeBtn.addEventListener('click', () => handleVote(itemId, 'dislike')); else console.error(`No dislike button for ${itemId}`);
+        if(likeBtn) {
+            console.log(`initializeLikingSystem: Adding LIKE listener for item '${itemId}'`);
+            likeBtn.addEventListener('click', () => {
+                console.log(`LIKE button clicked for item '${itemId}'`);
+                handleVote(itemId, 'like');
+            });
+        } else { console.error(`LIKE button NOT FOUND for item '${itemId}'`); }
+        if(dislikeBtn) {
+            console.log(`initializeLikingSystem: Adding DISLIKE listener for item '${itemId}'`);
+            dislikeBtn.addEventListener('click', () => {
+                console.log(`DISLIKE button clicked for item '${itemId}'`);
+                handleVote(itemId, 'dislike');
+            });
+        } else { console.error(`DISLIKE button NOT FOUND for item '${itemId}'`); }
+
         updateBoxDisplay(itemId);
         const itemRef = doc(db, 'items', itemId);
         const unsubscribe = onSnapshot(itemRef, (docSnap) => {
@@ -228,9 +248,35 @@ async function initializeLikingSystem() {
     }
     renderSortedBoxes();
 }
-async function loadUserVotes() {if (!currentUserId) {userVotes={}; return;} const ref=doc(db,'userVotes',currentUserId); try {const d=await getDoc(ref); userVotes=(d.exists()?d.data():{})||{};} catch(e){console.error("LoadUserVotes err:",e);userVotes={};throw e;}}
-async function ensureItemDocExists(itemId, initialData) {const ref=doc(db,'items',itemId); try {const d=await getDoc(ref); if(!d.exists()){const ds={likes:initialData.initialLikes||0,dislikes:initialData.initialDislikes||0}; await setDoc(ref,ds); return ds;} return d.data();} catch(e){console.error(`EnsureItem err ${itemId}:`,e);return null;}}
-async function handleVote(itemId, voteType) { if(!currentUserId || !auth.currentUser || !auth.currentUser.emailVerified){alert("Login & verify.");return;} const iR=doc(db,'items',itemId); const uVR=doc(db,'userVotes',currentUserId); const pUV=userVotes[itemId]; const lIB=JSON.parse(JSON.stringify(itemsData[itemId]||{likes:0,dislikes:0,internalScore:5,element:null,h2Prefix:`${itemId}: `,originalOrder:-1})); const lUVB=JSON.parse(JSON.stringify(userVotes)); if(!itemsData[itemId]){itemsData[itemId]={likes:0,dislikes:0,internalScore:5,element:document.querySelector(`.box[data-item-id="${itemId}"]`),h2Prefix:`${itemId}: `,originalOrder:PREDEFINED_ITEMS_CONFIG.findIndex(i=>i.id===itemId)};} itemsData[itemId].element=lIB.element; userVotes[itemId]=(pUV===voteType)?null:voteType; if(pUV===voteType){if(voteType==='like'&&itemsData[itemId].likes>0)itemsData[itemId].likes--;else if(voteType==='dislike'&&itemsData[itemId].dislikes>0)itemsData[itemId].dislikes--;}else{if(pUV==='like'&&itemsData[itemId].likes>0)itemsData[itemId].likes--;else if(pUV==='dislike'&&itemsData[itemId].dislikes>0)itemsData[itemId].dislikes--; if(voteType==='like')itemsData[itemId].likes++;else itemsData[itemId].dislikes++;} itemsData[itemId].internalScore=calculateInternalScore(itemsData[itemId].likes,itemsData[itemId].dislikes); updateBoxDisplay(itemId);renderSortedBoxes(); try{await runTransaction(db,async t=>{const iDS=await t.get(iR);if(!iDS.exists())throw new Error(`Item ${itemId} missing!`);let cL=iDS.data().likes||0;let cD=iDS.data().dislikes||0;let lI=0,dI=0;if(pUV===voteType){if(voteType==='like')lI=-1;else dI=-1;}else{if(pUV==='like')lI=-1;else if(pUV==='dislike')dI=-1;if(voteType==='like')lI+=1;else dI+=1;}const nL=Math.max(0,cL+lI);const nD=Math.max(0,cD+dI);t.update(iR,{likes:nL,dislikes:nD});const uVU={};if(userVotes[itemId]===null)uVU[itemId]=deleteField();else uVU[itemId]=userVotes[itemId];t.set(uVR,uVU,{merge:true});});}catch(e){console.error(`Vote err ${itemId}:`,e);alert("Vote fail.Reverted.");itemsData[itemId]=lIB;userVotes=lUVB;updateBoxDisplay(itemId);renderSortedBoxes();}}
+
+async function handleVote(itemId, newVoteType) {
+    console.log(`%c--- handleVote CALLED --- Item: ${itemId}, VoteType: ${newVoteType}`, "color: brown; font-weight: bold;");
+    if (!auth.currentUser) { console.error("handleVote: No auth.currentUser. Aborting."); alert("Please log in to vote."); return; }
+    if (!auth.currentUser.emailVerified) { console.error("handleVote: User email not verified. Aborting."); alert("Please verify your email to vote."); return; }
+    if (!currentUserId) { currentUserId = auth.currentUser.uid; if(!currentUserId) { console.error("handleVote: currentUserId still not set. Aborting."); alert("User session error."); return; } console.warn("handleVote: currentUserId was re-set."); }
+    console.log(`handleVote: User ${currentUserId} (verified) attempting vote.`);
+
+    const itemRef = doc(db, 'items', itemId); const userVotesRef = doc(db, 'userVotes', currentUserId);
+    const previousUserVote = userVotes[itemId];
+
+    const existingBoxElement = itemsData[itemId] ? itemsData[itemId].element : null;
+    const itemDataBeforeVoteForRevert = JSON.parse(JSON.stringify(itemsData[itemId] || {likes:0,dislikes:0,internalScore:5,h2Prefix:`${itemId}: `,originalOrder:-1}));
+    const userVotesBeforeVoteForRevert = JSON.parse(JSON.stringify(userVotes));
+
+    if (!itemsData[itemId]) {
+        itemsData[itemId] = { likes:0,dislikes:0,internalScore:5,h2Prefix:`${itemId}: `,originalOrder:PREDEFINED_ITEMS_CONFIG.findIndex(i=>i.id===itemId), element: existingBoxElement || document.querySelector(`.box[data-item-id="${itemId}"]`) };
+    } else if (existingBoxElement) {
+        itemsData[itemId].element = existingBoxElement;
+    }
+
+    userVotes[itemId]=(previousUserVote===newVoteType)?null:newVoteType;
+    if(previousUserVote===newVoteType){if(newVoteType==='like'&&itemsData[itemId].likes>0)itemsData[itemId].likes--;else if(newVoteType==='dislike'&&itemsData[itemId].dislikes>0)itemsData[itemId].dislikes--;}
+    else{if(previousUserVote==='like'&&itemsData[itemId].likes>0)itemsData[itemId].likes--;else if(previousUserVote==='dislike'&&itemsData[itemId].dislikes>0)itemsData[itemId].dislikes--; if(newVoteType==='like')itemsData[itemId].likes++;else itemsData[itemId].dislikes++;}
+    itemsData[itemId].internalScore=calculateInternalScore(itemsData[itemId].likes,itemsData[itemId].dislikes);
+    updateBoxDisplay(itemId);renderSortedBoxes();
+    try{await runTransaction(db,async t=>{const iDS=await t.get(itemRef);if(!iDS.exists())throw new Error(`Item ${itemId} missing!`);let cL=iDS.data().likes||0;let cD=iDS.data().dislikes||0;let lI=0,dI=0;if(pUV===newVoteType){if(newVoteType==='like')lI=-1;else dI=-1;}else{if(pUV==='like')lI=-1;else if(pUV==='dislike')dI=-1;if(newVoteType==='like')lI+=1;else dI+=1;}const nL=Math.max(0,cL+lI);const nD=Math.max(0,cD+dI);t.update(iR,{likes:nL,dislikes:nD});const uVU={};if(userVotes[itemId]===null)uVU[itemId]=deleteField();else uVU[itemId]=userVotes[itemId];t.set(uVR,uVU,{merge:true});});console.log(`Vote for ${itemId} (${newVoteType}) recorded.`);}
+    catch(e){console.error(`Vote err ${itemId}:`,e);alert("Vote fail.Reverted.");itemsData[itemId]={...itemDataBeforeVoteForRevert, element: existingBoxElement};userVotes=localUserVotesBeforeVote;updateBoxDisplay(itemId);renderSortedBoxes();}}
+
 function getVoteValue(vN){if(vN<=0)return 0;if(vN<=10)return 0.1;if(vN<=20)return 0.05;if(vN<=30)return 0.025;if(vN<=50)return 0.01;return 0.005;}
 function calculateRawVoteScore(c){let s=0;for(let i=1;i<=c;i++)s+=getVoteValue(i);return s;}
 function calculateInternalScore(l,d){return 5+calculateRawVoteScore(l)-calculateRawVoteScore(d);}
